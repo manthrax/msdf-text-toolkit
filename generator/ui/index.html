@@ -436,14 +436,17 @@
           select.appendChild(option);
         });
         
-        // Auto-generate Montserrat-Bold for debugging
-        setTimeout(() => {
-          const montserrat = data.fonts.find(f => f.includes('Montserrat-Bold'));
-          if (montserrat) {
-            select.value = `fonts/${montserrat}`;
-            setTimeout(() => generate(), 100);
-          }
-        }, 200);
+        // Auto-generate Montserrat-Bold for debugging (only if ?debug=true)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('debug') === 'true') {
+          setTimeout(() => {
+            const montserrat = data.fonts.find(f => f.includes('Montserrat-Bold'));
+            if (montserrat) {
+              select.value = `fonts/${montserrat}`;
+              setTimeout(() => generate(), 100);
+            }
+          }, 200);
+        }
       } catch (error) {
         log(`Failed to load fonts: ${error.message}`, 'error');
       }
@@ -1149,15 +1152,19 @@
     loadFonts();
     setupRenderingControls();
     
-    // Auto-generate Montserrat-Bold on load for debugging
-    setTimeout(() => {
-      const fontSelect = document.getElementById('fontSelect');
-      const montserratOption = Array.from(fontSelect.options).find(opt => opt.value.includes('Montserrat-Bold'));
-      if (montserratOption) {
-        fontSelect.value = montserratOption.value;
-        generate();
-      }
-    }, 500);
+    // Auto-generate Montserrat-Bold on load for debugging (only if ?debug=true)
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('debug') === 'true') {
+      setTimeout(() => {
+        const fontSelect = document.getElementById('fontSelect');
+        const montserratOption = Array.from(fontSelect.options).find(opt => opt.value.includes('Montserrat-Bold'));
+        if (montserratOption) {
+          fontSelect.value = montserratOption.value;
+          generate();
+        }
+      }, 500);
+      log('Debug mode: Auto-generating Montserrat-Bold', 'info');
+    }
     
     log('Ready to generate MSDF atlases', 'info');
   </script>
