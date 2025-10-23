@@ -38,6 +38,23 @@ const text = new MSDFString({
 
 // Note: maxLength is just an optimistic starting size
 // The mesh automatically resizes if text exceeds capacity
+
+// Option 3: Inject MSDF into existing Three.js material
+const standardMaterial = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  metalness: 0.5,
+  roughness: 0.5
+});
+
+const text = new MSDFString({
+  font: 'Montserrat-Bold',
+  text: 'PBR Text!',
+  material: standardMaterial,  // Uses onBeforeCompile to inject MSDF
+  color: '#00ff88',
+  thickness: 0.5
+});
+// This allows MSDF text to work with standard Three.js materials,
+// enabling features like PBR lighting, env maps, etc.
 ```
 
 ## 🚀 Common Commands

@@ -9,12 +9,14 @@ A complete toolkit for generating and rendering high-quality, resolution-indepen
 - Advanced antialiasing using fractional derivatives
 - Per-instance coloring for dynamic effects
 - Outline and stroke support
+- Glow/shadow mode for soft edges
 
 🎨 **Easy-to-Use Library**
 - Clean ES6 module API
 - Simple font loading and text creation
 - Dynamic text updates without regeneration
 - Efficient instanced rendering
+- Works with existing Three.js materials (PBR, env maps, etc.)
 
 🛠️ **Complete Generation Pipeline**
 - Web-based MSDF atlas generator
@@ -83,6 +85,49 @@ Then open http://localhost:3001 in your browser to generate atlases from your fo
 </html>
 ```
 
+### 3. Advanced: Using with Three.js Materials
+
+You can inject MSDF functionality into existing Three.js materials to combine text rendering with PBR lighting, environment maps, and other material features:
+
+```javascript
+import * as THREE from 'three';
+import { MSDFString } from './lib/MSDFString.js';
+
+// Load font
+await MSDFString.loadFont('MyFont', '/atlases');
+
+// Create a standard PBR material
+const material = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  metalness: 0.5,
+  roughness: 0.3,
+  envMap: myEnvMap  // Environment mapping works!
+});
+
+// Create text with the custom material
+const textMesh = new MSDFString({
+  font: 'MyFont',
+  text: 'PBR Text!',
+  material: material,  // MSDF is injected via onBeforeCompile
+  fontSize: 0.01,
+  color: '#60a5fa',
+  thickness: 0.5
+});
+
+// The text now responds to lights, has metallic properties, etc.
+// All MSDFString methods still work:
+textMesh.enableGlow();
+textMesh.setGlobalColor('#ff00ff');
+```
+
+This enables:
+- **PBR Lighting**: Text responds to directional, point, and spot lights
+- **Environment Mapping**: Reflections on metallic text
+- **Physical Properties**: Control metalness, roughness, clearcoat
+- **Standard Material Features**: Emissive, fog, alpha maps, etc.
+
+See `examples/standard-material.html` for a complete demo.
+
 ## Project Structure
 
 ```
@@ -106,7 +151,8 @@ msdf-text-toolkit/
 │       └── matrixRain.js    # Matrix rain effect
 ├── examples/              # Usage examples
 │   ├── basic.html         # Basic text rendering with interactive controls
-│   └── matrix-mode.html   # Matrix digital rain effect
+│   ├── matrix-mode.html   # Matrix digital rain effect
+│   └── standard-material.html  # MSDF with PBR materials
 ├── atlases/               # Generated MSDF atlases
 └── README.md
 ```
