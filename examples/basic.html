@@ -107,7 +107,7 @@ MSDF Rendering</textarea>
     let textMesh;
     let selectedCharIndex = -1;
 
-    const API_URL = 'http://localhost:3001';
+    const API_URL = window.location.origin; // Use current host
 
     init();
 
