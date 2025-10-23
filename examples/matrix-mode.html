@@ -52,7 +52,6 @@
     let matrixMesh;
     let matrixEffect;
 
-    const API_URL = window.location.origin; // Use current host
     const FONT_NAME = 'Zenzai Itacha'; // Cool matrix font!
 
     init();
@@ -66,7 +65,7 @@
 
       // Load font using the unified API
       try {
-        await MSDFString.loadFont(FONT_NAME, `${API_URL}/atlases`);
+        await MSDFString.loadFont(FONT_NAME, '/atlases');
         initMatrix();
 
         // Start animation loop with matrix update logic

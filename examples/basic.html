@@ -107,8 +107,6 @@ MSDF Rendering</textarea>
     let textMesh;
     let selectedCharIndex = -1;
 
-    const API_URL = window.location.origin; // Use current host
-
     init();
 
     async function init() {
@@ -120,7 +118,7 @@ MSDF Rendering</textarea>
 
       // Load font using the unified API
       try {
-        await MSDFString.loadFont('Montserrat-Bold', `${API_URL}/atlases`);
+        await MSDFString.loadFont('Montserrat-Bold', '/atlases');
         createText();
 
         // Setup raycasting for character selection
