@@ -3,154 +3,273 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MSDF Text Renderer - Basic Example</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-      background: #0b0b0b;
-      color: #ddd;
-    }
-    canvas {
-      display: block;
-    }
-    #info {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(0, 0, 0, 0.8);
-      padding: 15px;
-      border-radius: 5px;
-      max-width: 300px;
-    }
-    button {
-      margin: 5px;
-      padding: 8px 12px;
-      background: #60a5fa;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #3b82f6;
-    }
-  </style>
+  <title>MSDF Basic Demo - MSDFString API</title>
+  <link rel="stylesheet" href="../lib/demo-styles.css">
 </head>
 <body>
-  <div id="info">
-    <h3>MSDF Text Renderer</h3>
-    <p>Basic usage example</p>
-    <button onclick="changeText()">Change Text</button>
-    <button onclick="addOutline()">Toggle Outline</button>
+  <div id="controls" class="msdf-controls">
+    <h2>🎨 MSDFString Demo</h2>
+    
+    <div class="section">
+      <div class="control-group">
+        <label>Text Content</label>
+        <textarea id="textInput">Hello World!
+MSDF Rendering</textarea>
+        <button onclick="updateText()">Update Text</button>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2>🌈 Global Controls</h2>
+      
+      <div class="control-group">
+        <label>Color</label>
+        <div class="color-row">
+          <input type="color" id="colorPicker" value="#ffffff">
+          <input type="text" id="colorHex" value="#ffffff">
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <label>Outline Color</label>
+        <div class="color-row">
+          <input type="color" id="outlineColorPicker" value="#ff0000">
+          <input type="text" id="outlineColorHex" value="#ff0000">
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <label>Thickness: <span class="value-display" id="thicknessValue">0.50</span></label>
+        <input type="range" id="thickness" min="0" max="1" step="0.01" value="0.5">
+      </div>
+      
+      <div class="control-group">
+        <label>Outline: <span class="value-display" id="outlineValue">0.20</span></label>
+        <input type="range" id="outline" min="0" max="0.5" step="0.01" value="0.2">
+      </div>
+      
+      <div class="control-group">
+        <label style="display: flex; align-items: center;">
+          <input type="checkbox" id="glowMode" style="width: auto; margin-right: 8px;">
+          <span>Glow Mode (soft alpha fade)</span>
+        </label>
+        <div style="font-size: 11px; color: #666; margin-top: 4px;">
+          Unchecked = hard outline, Checked = soft glow/shadow
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2>✨ Per-Character Demo</h2>
+      
+      <div class="control-group">
+        <label>Selected Character: <span class="value-display" id="selectedCharDisplay">None</span></label>
+        <div style="font-size: 11px; color: #666; margin-top: 4px;">Click on any character to select</div>
+      </div>
+      
+      <div class="control-group">
+        <label>Character Color</label>
+        <div class="color-row">
+          <input type="color" id="charColorPicker" value="#8a8a8a">
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <label>Character Thickness: <span class="value-display" id="charThicknessValue">1.00</span></label>
+        <input type="range" id="charThickness" min="0.1" max="3" step="0.1" value="1.0">
+      </div>
+      
+      <button onclick="resetCharColors()">Reset All Characters</button>
+    </div>
+    
+    <div class="info">
+      <strong>Hybrid Control:</strong> Global × Instance<br>
+      Drag to orbit • Scroll to zoom
+    </div>
   </div>
 
   <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
     }
+  }
   </script>
 
   <script type="module">
     import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { MSDFTextRenderer, solidColor } from '../lib/MSDFTextRenderer.js';
+    import { MSDFString } from '../lib/MSDFString.js';
+    import { initThreeScene, createAnimationLoop, setupRaycasting } from '../lib/threeHelpers.js';
+    import { syncColorInputs, syncSliderValue, rgbToHex } from '../lib/uiHelpers.js';
 
-    // Setup Three.js scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b0b0b);
+    let threeContext;
+    let textMesh;
+    let selectedCharIndex = -1;
 
-    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, 5);
+    const API_URL = 'http://localhost:3001';
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-
-    // Create text renderer
-    const textRenderer = new MSDFTextRenderer(scene);
-
-    let textId;
-    let hasOutline = false;
-
-    // Load font and create text
-    async function init() {
-      try {
-        // Load a generated font atlas
-        // NOTE: You need to generate this first using the generator!
-        await textRenderer.loadFont(
-          'demo-font',
-          '../atlases/Montserrat-Bold.png',  // Change to your generated atlas
-          '../atlases/Montserrat-Bold.json'   // Change to your generated atlas
-        );
-
-        // Create text with custom styling
-        const result = textRenderer.createText({
-          fontName: 'demo-font',
-          text: 'Hello MSDF Text!\nHigh Quality at Any Scale\n0123456789',
-          scale: 0.015,
-          thickness: 0.5,
-          smoothness: 0.05,
-          colorFunction: solidColor(0x60a5fa)
-        });
-
-        textId = result.id;
-        console.log('Text created with ID:', textId);
-
-      } catch (error) {
-        console.error('Failed to initialize:', error);
-        document.getElementById('info').innerHTML += `<p style="color: #f87171;">Error: ${error.message}</p><p>Make sure to generate an atlas first!</p>`;
-      }
-    }
-
-    // Change text content
-    window.changeText = function() {
-      if (textId === undefined) return;
-      const texts = [
-        'Hello MSDF Text!',
-        'Resolution Independent\nText Rendering',
-        'The quick brown fox\njumps over the lazy dog',
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789'
-      ];
-      const randomText = texts[Math.floor(Math.random() * texts.length)];
-      textRenderer.updateText(textId, randomText);
-    };
-
-    // Toggle outline
-    window.addOutline = function() {
-      if (textId === undefined) return;
-      hasOutline = !hasOutline;
-      textRenderer.updateParams(textId, {
-        outlineWidth: hasOutline ? 0.1 : 0.0,
-        outlineColor: 0x000000
-      });
-    };
-
-    // Animation loop
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-
-    // Handle window resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Start
     init();
-    animate();
+
+    async function init() {
+      // Initialize Three.js scene using shared utilities
+      threeContext = initThreeScene(document.body, {
+        bgColor: 0x0b0b0b,
+        cameraPosition: { x: 0, y: 0, z: 5 }
+      });
+
+      // Load font using the unified API
+      try {
+        await MSDFString.loadFont('Montserrat-Bold', `${API_URL}/atlases`);
+        createText();
+
+        // Setup raycasting for character selection
+        setupRaycasting(
+          threeContext.camera,
+          threeContext.renderer.domElement,
+          (instanceId) => selectCharacter(instanceId),
+          { objects: [textMesh] }
+        );
+      } catch (error) {
+        console.error('Error loading font:', error);
+      }
+
+      // Setup UI event listeners
+      setupControls();
+
+      // Start animation loop
+      createAnimationLoop(() => {
+        // Animation logic can go here if needed
+      }, threeContext);
+    }
+
+    function onMouseClick(event) {
+      // This function is now handled by setupRaycasting helper
+    }
+
+    function selectCharacter(index) {
+      if (index < 0 || index >= textMesh.getLength()) return;
+
+      // Reset previous selection outline
+      if (selectedCharIndex >= 0) {
+        textMesh.setCharacterOutlineColor(selectedCharIndex, '#000000', 1.0);
+      }
+
+      selectedCharIndex = index;
+
+      // Highlight selected character with outline
+      textMesh.setCharacterOutlineColor(selectedCharIndex, '#ffff00', 1.0);
+      textMesh.setGlobalOutlineThickness(0.05); // Ensure outline is visible
+
+      // Update UI
+      const text = textMesh.getText();
+      const char = text[index] || '?';
+      document.getElementById('selectedCharDisplay').textContent = `"${char}" (index: ${index})`;
+
+      // Update color picker to match selected character's color
+      // (This is just the instance multiplier, actual color is global × instance)
+      const colors = textMesh.geometry.attributes.instanceColor.array;
+      const r = colors[index * 4 + 0] * 255;
+      const g = colors[index * 4 + 1] * 255;
+      const b = colors[index * 4 + 2] * 255;
+      const hex = rgbToHex(r, g, b);
+      document.getElementById('charColorPicker').value = hex;
+
+      // Update thickness slider
+      const thicknesses = textMesh.geometry.attributes.instanceThickness.array;
+      const thickness = thicknesses[index * 2 + 0];
+      document.getElementById('charThickness').value = thickness;
+      document.getElementById('charThicknessValue').textContent = thickness.toFixed(2);
+    }
+
+    function createText() {
+      if (textMesh) {
+        threeContext.scene.remove(textMesh);
+        textMesh.geometry.dispose();
+        textMesh.material.dispose();
+      }
+
+      const text = document.getElementById('textInput').value;
+      
+      // Use font by name - it's already loaded and cached
+      textMesh = new MSDFString({
+        font: 'Montserrat-Bold',
+        text: text,
+        color: document.getElementById('colorPicker').value,
+        outlineColor: document.getElementById('outlineColorPicker').value,
+        thickness: parseFloat(document.getElementById('thickness').value),
+        outlineThickness: parseFloat(document.getElementById('outline').value),
+        maxLength: 200
+      });
+
+      threeContext.scene.add(textMesh);
+    }
+
+    function setupControls() {
+      // Color pickers using shared helper
+      syncColorInputs(
+        document.getElementById('colorPicker'),
+        document.getElementById('colorHex'),
+        (color) => { if (textMesh) textMesh.setGlobalColor(color); }
+      );
+
+      syncColorInputs(
+        document.getElementById('outlineColorPicker'),
+        document.getElementById('outlineColorHex'),
+        (color) => { if (textMesh) textMesh.setGlobalOutlineColor(color); }
+      );
+
+      // Sliders using shared helper
+      syncSliderValue(
+        document.getElementById('thickness'),
+        document.getElementById('thicknessValue'),
+        (val) => { if (textMesh) textMesh.setGlobalThickness(val); }
+      );
+
+      syncSliderValue(
+        document.getElementById('outline'),
+        document.getElementById('outlineValue'),
+        (val) => { if (textMesh) textMesh.setGlobalOutlineThickness(val); }
+      );
+
+      // Glow mode checkbox
+      document.getElementById('glowMode').addEventListener('change', (e) => {
+        if (!textMesh) return;
+        if (e.target.checked) {
+          textMesh.enableGlow();
+        } else {
+          textMesh.disableGlow();
+        }
+      });
+
+      // Character controls - auto-apply to selected character
+      document.getElementById('charColorPicker').addEventListener('input', (e) => {
+        if (!textMesh || selectedCharIndex < 0) return;
+        textMesh.setCharacterColor(selectedCharIndex, e.target.value, 1.0);
+      });
+
+      syncSliderValue(
+        document.getElementById('charThickness'),
+        document.getElementById('charThicknessValue'),
+        (val) => {
+          if (!textMesh || selectedCharIndex < 0) return;
+          textMesh.setCharacterThickness(selectedCharIndex, val, 1.0);
+        }
+      );
+    }
+
+    window.updateText = function() {
+      selectedCharIndex = -1;
+      document.getElementById('selectedCharDisplay').textContent = 'None';
+      createText();
+    };
+
+    window.resetCharColors = function() {
+      if (!textMesh) return;
+      selectedCharIndex = -1;
+      document.getElementById('selectedCharDisplay').textContent = 'None';
+      textMesh.resetCharacterAttributes();
+    };
   </script>
 </body>
 </html>
-

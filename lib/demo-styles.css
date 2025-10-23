@@ -1,0 +1,137 @@
+/**
+ * Shared styles for MSDF Text Toolkit demos and generator
+ */
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+canvas {
+  display: block;
+}
+
+/* Control Panel Styles */
+.msdf-controls {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 20px;
+  border-radius: 12px;
+  color: #fff;
+  min-width: 300px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.msdf-controls h2 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #4CAF50;
+  border-bottom: 2px solid #4CAF50;
+  padding-bottom: 8px;
+}
+
+.control-group {
+  margin-bottom: 18px;
+}
+
+.msdf-controls label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #aaa;
+  font-weight: 500;
+}
+
+.msdf-controls input[type="range"] {
+  width: 100%;
+  margin: 5px 0;
+  cursor: pointer;
+}
+
+.msdf-controls input[type="color"] {
+  width: 60px;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.msdf-controls input[type="text"],
+.msdf-controls input[type="number"],
+.msdf-controls textarea,
+.msdf-controls select {
+  width: 100%;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.msdf-controls textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: monospace;
+}
+
+.value-display {
+  display: inline-block;
+  min-width: 45px;
+  text-align: right;
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.msdf-controls button {
+  background: #4CAF50;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 10px;
+  transition: background 0.2s;
+}
+
+.msdf-controls button:hover {
+  background: #45a049;
+}
+
+.section {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.info {
+  font-size: 11px;
+  color: #666;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hidden {
+  display: none !important;
+}
+

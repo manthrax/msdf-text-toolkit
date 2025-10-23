@@ -394,13 +394,17 @@
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { MSDFString } from '/lib/MSDFString.js';
+    import { initThreeScene, createAnimationLoop } from '/lib/threeHelpers.js';
+    import { MatrixRain } from '/lib/effects/matrixRain.js';
+    import { applyRainbowGradient } from '/lib/textPreview.js';
 
     const API_URL = 'http://localhost:3001/api';
     
     let scene, camera, renderer, controls;
     let currentAtlas = null;
     let previewMesh = null;
-    let matrixState = null; // Matrix animation state
+    let matrixEffect = null; // Matrix animation effect
     
     // Store generated atlas data for download
     let generatedAtlasData = {
@@ -447,8 +451,8 @@
       controls.update();
       
       // Update Matrix animation if active
-      if (matrixState && matrixState.active) {
-        updateMatrixAnimation();
+      if (matrixEffect) {
+        matrixEffect.update();
       }
       
       renderer.render(scene, camera);
@@ -566,364 +570,71 @@
       }
     };
 
-    // MSDF Shaders
-    const msdfVertexShader = `
-      attribute vec4 uvOffset; // x, y = offset in atlas; z, w = width, height
-      attribute vec3 instanceColor; // per-instance color
-      
-      varying vec2 vUv;
-      varying vec3 vColor;
-      
-      void main() {
-        // Calculate UV coordinates for this glyph
-        vUv = vec2(
-          uvOffset.x + uv.x * uvOffset.z,
-          uvOffset.y + uv.y * uvOffset.w
-        );
-        
-        // Pass per-instance color to fragment shader
-        vColor = instanceColor;
-        
-        // Standard Three.js transformation pipeline
-        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-      }
-    `;
-
-    const msdfFragmentShader = `
-      uniform sampler2D msdfTexture;
-      uniform float thickness;
-      uniform float smoothness;
-      uniform float outlineWidth;
-      uniform vec3 outlineColor;
-      
-      varying vec2 vUv;
-      varying vec3 vColor;
-
-      float median(float r, float g, float b) {
-        return max(min(r, g), min(max(r, g), b));
-      }
-
-      void main() {
-        // Sample MSDF texture
-        vec3 msd = texture2D(msdfTexture, vUv).rgb;
-        float sd = median(msd.r, msd.g, msd.b);
-        
-        // Improved antialiasing using fractional derivatives from MSDF
-        // Use the spread of RGB channels to estimate anisotropic filtering
-        vec2 Jdx = dFdx(msd.rg);
-        vec2 Jdy = dFdy(msd.rg);
-        float pixelDist = sqrt(dot(Jdx, Jdx) + dot(Jdy, Jdy));
-        float w = max(pixelDist, 0.0001); // Avoid division by zero
-        
-        // Calculate signed distance in screen pixels
-        float screenPxDistance = (sd - 0.5) / w;
-        
-        // Inner edge (fill boundary)
-        float innerEdge = thickness;
-        float innerDist = (sd - innerEdge) / w;
-        float innerAlpha = clamp(innerDist + 0.5, 0.0, 1.0);
-        innerAlpha = smoothstep(0.5 - smoothness, 0.5 + smoothness, innerAlpha);
-        
-        // Outer edge (outline boundary)
-        float outerEdge = thickness - outlineWidth;
-        float outerDist = (sd - outerEdge) / w;
-        float outerAlpha = clamp(outerDist + 0.5, 0.0, 1.0);
-        outerAlpha = smoothstep(0.5 - smoothness, 0.5 + smoothness, outerAlpha);
-        
-        // Outline mask: area between outer and inner edges
-        float outlineMask = outerAlpha * (1.0 - innerAlpha);
-        
-        // Blend fill color with outline color
-        vec3 finalColor = mix(vColor, outlineColor, outlineMask);
-        float finalAlpha = outerAlpha;
-        
-        if (finalAlpha < 0.01) discard;
-        
-        gl_FragColor = vec4(finalColor, finalAlpha);
-      }
-    `;
-    
-    // Generate instanced mesh for text
+    // Generate text mesh using MSDFString API
     function generateTextMesh(text, atlasData, atlasTexture) {
-      if (!atlasData || !atlasTexture) return null;
-      
-      // Build glyph lookup from BMFont format
-      const glyphMap = new Map();
-      const texW = atlasData.common.scaleW; // Texture width in pixels
-      const texH = atlasData.common.scaleH; // Texture height in pixels
-      
-      for (const charData of atlasData.chars) {
-        const char = String.fromCharCode(charData.id);
-        glyphMap.set(char, charData);
+      if (!atlasData || !atlasTexture) {
+        console.warn('generateTextMesh: Missing atlasData or atlasTexture');
+        return null;
       }
       
-      const lines = text.split('\n');
-      const fontSize = atlasData.info.size;
-      const scale = 0.01; // Scale factor to convert font units to world units
-      const lineHeight = atlasData.common.lineHeight * scale;
-      
-      let totalChars = 0;
-      for (const line of lines) {
-        totalChars += line.length;
+      try {
+        const textMesh = new MSDFString({
+          font: { texture: atlasTexture, data: atlasData },
+          text: text,
+          color: '#00ff88',  // Start with a nice teal
+          outlineColor: '#000000',
+          thickness: 0.5,
+          outlineThickness: 0.0,
+          maxLength: 1000
+        });
+        
+        // Set appropriate fontSize for visibility (not in constructor)
+        textMesh.setText(text, {
+          fontSize: 0.015,  // Scale text to be visible
+          align: 'center'
+        });
+        
+        // Apply rainbow gradient using shared helper
+        applyRainbowGradient(textMesh);
+        
+        return textMesh;
+      } catch (error) {
+        console.error('Error creating MSDFString:', error);
+        log(`Error creating text mesh: ${error.message}`, 'error');
+        return null;
       }
-      
-      if (totalChars === 0) return null;
-      
-      // Create instanced geometry
-      const geometry = new THREE.PlaneGeometry(1, 1);
-      const material = new THREE.ShaderMaterial({
-        uniforms: {
-          msdfTexture: { value: atlasTexture },
-          thickness: { value: 0.5 },
-          smoothness: { value: 0.05 },
-          outlineWidth: { value: 0.0 },
-          outlineColor: { value: new THREE.Color(0x000000) }
-        },
-        vertexShader: msdfVertexShader,
-        fragmentShader: msdfFragmentShader,
-        transparent: true,
-        depthTest: true, // Enable for proper 3D depth sorting
-        depthWrite: true // Write to depth buffer for correct occlusion
-      });
-
-      const mesh = new THREE.InstancedMesh(geometry, material, totalChars);
-      
-      // Store material reference for UI updates
-      mesh.userData.material = material;
-
-      // Layout glyphs
-      const dummy = new THREE.Object3D();
-      const uvOffset = new Float32Array(totalChars * 4);
-      const instanceColors = new Float32Array(totalChars * 3); // RGB per instance
-      
-      let idx = 0;
-      
-      for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-        const line = lines[lineIdx];
-        
-        // Calculate line width for centering
-        let lineWidth = 0;
-        for (const char of line) {
-          const glyph = glyphMap.get(char);
-          if (glyph) {
-            lineWidth += glyph.xadvance * scale;
-          } else {
-            lineWidth += fontSize * scale * 0.3;
-          }
-        }
-        
-        let xOffset = -lineWidth / 2;
-        const yOffset = (lines.length / 2 - lineIdx - 0.5) * lineHeight;
-        
-        for (const char of line) {
-          const glyph = glyphMap.get(char);
-          
-          if (!glyph) {
-            xOffset += fontSize * scale * 0.3;
-            continue;
-          }
-          
-          // Glyph dimensions in world units
-          const glyphWidth = glyph.width * scale;
-          const glyphHeight = glyph.height * scale;
-          
-          // Position with offsets for proper alignment
-          const xPos = xOffset + glyph.xoffset * scale + glyphWidth / 2;
-          const yPos = yOffset - glyph.yoffset * scale - glyphHeight / 2;
-          
-          dummy.position.set(xPos, yPos, 0);
-          dummy.scale.set(glyphWidth, glyphHeight, 1);
-          dummy.updateMatrix();
-          mesh.setMatrixAt(idx, dummy.matrix);
-
-          // UV coordinates (normalized 0-1)
-          // BMFont uses top-left origin, WebGL uses bottom-left, so flip V coordinate
-          uvOffset[idx * 4 + 0] = glyph.x / texW;                        // U start (left)
-          uvOffset[idx * 4 + 1] = (glyph.y + glyph.height) / texH;       // V start (bottom, flipped)
-          uvOffset[idx * 4 + 2] = glyph.width / texW;                    // U size
-          uvOffset[idx * 4 + 3] = -glyph.height / texH;                  // V size (negative to flip)
-          
-          // Per-instance color (rainbow gradient for demo)
-          const hue = (idx / totalChars) * 360;
-          const color = new THREE.Color().setHSL(hue / 360, 0.8, 0.6);
-          instanceColors[idx * 3 + 0] = color.r;
-          instanceColors[idx * 3 + 1] = color.g;
-          instanceColors[idx * 3 + 2] = color.b;
-          
-          xOffset += glyph.xadvance * scale;
-          idx++;
-        }
-      }
-      
-      // Hide unused instances
-      for (let i = idx; i < totalChars; i++) {
-        dummy.position.set(0, 0, -1000);
-        dummy.scale.set(0, 0, 0);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-        
-        // Default color for hidden instances
-        instanceColors[i * 3 + 0] = 1.0;
-        instanceColors[i * 3 + 1] = 1.0;
-        instanceColors[i * 3 + 2] = 1.0;
-      }
-
-      geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 4));
-      geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instanceColors, 3));
-      mesh.instanceMatrix.needsUpdate = true;
-
-      return mesh;
     }
 
-    // Matrix Mode Animation
+    // Matrix Mode Animation (using shared module)
     function initMatrixMode() {
       if (!previewMesh || !currentAtlas) return;
       
-      const instanceCount = previewMesh.geometry.attributes.uvOffset.count;
-      const glyphMap = new Map();
+      // Enable glow mode for matrix effect
+      previewMesh.enableGlow();
       
-      // Build glyph map
-      for (const charData of currentAtlas.data.chars) {
-        const char = String.fromCharCode(charData.id);
-        glyphMap.set(char, charData);
-      }
-      
-      const glyphArray = Array.from(glyphMap.keys());
-      const texW = currentAtlas.data.common.scaleW;
-      const texH = currentAtlas.data.common.scaleH;
-      const scale = 0.01;
-      
-      // Initialize Matrix state for each glyph
-      matrixState = {
-        active: true,
-        instanceCount,
-        columns: [],
-        glyphMap,
-        glyphArray,
-        texW,
-        texH,
-        scale
-      };
-      
-      // Create columns in 3D space (streams of characters)
-      const numColumns = 300; // 10x density with more columns!
-      const charsPerColumn = 45; // Longer trails for density
-      const gridSize = Math.ceil(Math.sqrt(numColumns)); // Square grid
-      const spacing = 0.4; // Tighter spacing for density
-      const gridWidth = gridSize * spacing;
-      const viewHeight = 10; // Taller view
-      
-      let instanceIdx = 0;
-      for (let i = 0; i < numColumns && instanceIdx < instanceCount; i++) {
-        const columnLength = charsPerColumn;
-        
-        // Position columns in a 3D grid
-        const gridX = i % gridSize;
-        const gridZ = Math.floor(i / gridSize);
-        
-        const column = {
-          x: -gridWidth / 2 + gridX * spacing, // Grid X position
-          y: viewHeight / 2 + Math.random() * 5, // Random start height
-          z: -gridWidth / 2 + gridZ * spacing, // Grid Z position (depth!)
-          speed: 0.015 + Math.random() * 0.05, // Speed variation
-          length: columnLength,
-          chars: [],
-          instanceIndices: []
-        };
-        
-        // Assign multiple instances to this column for the trail effect
-        for (let j = 0; j < columnLength && instanceIdx < instanceCount; j++) {
-          column.instanceIndices.push(instanceIdx);
-          column.chars.push(glyphArray[Math.floor(Math.random() * glyphArray.length)]);
-          instanceIdx++;
-        }
-        
-        matrixState.columns.push(column);
-      }
-      
-      // Set initial green colors
-      const geometry = previewMesh.geometry;
-      const colors = geometry.attributes.instanceColor.array;
-      for (let i = 0; i < instanceCount; i++) {
-        const brightness = 0.3 + Math.random() * 0.7;
-        colors[i * 3 + 0] = 0.0; // R
-        colors[i * 3 + 1] = brightness; // G
-        colors[i * 3 + 2] = 0.0; // B
-      }
-      geometry.attributes.instanceColor.needsUpdate = true;
-    }
-    
-    function updateMatrixAnimation() {
-      if (!matrixState || !previewMesh) return;
-      
-      const dummy = new THREE.Object3D();
-      const geometry = previewMesh.geometry;
-      const uvOffset = geometry.attributes.uvOffset.array;
-      const colors = geometry.attributes.instanceColor.array;
-      const charSize = 0.12; // Smaller characters for denser effect
-      
-      for (const column of matrixState.columns) {
-        // Update column position
-        column.y -= column.speed;
-        
-        // Reset column when it goes too far down
-        if (column.y < -6) {
-          column.y = 6 + Math.random() * 4;
-          column.speed = 0.015 + Math.random() * 0.05;
-          
-          // Randomize characters
-          for (let i = 0; i < column.chars.length; i++) {
-            if (Math.random() > 0.7) {
-              column.chars[i] = matrixState.glyphArray[
-                Math.floor(Math.random() * matrixState.glyphArray.length)
-              ];
-            }
-          }
-        }
-        
-        // Update each character in the column
-        for (let i = 0; i < column.instanceIndices.length; i++) {
-          const idx = column.instanceIndices[i];
-          const charY = column.y - (i * charSize * 0.85); // Tighter vertical spacing
-          
-          // Position in 3D space!
-          dummy.position.set(column.x, charY, column.z);
-          dummy.scale.set(charSize, charSize, 1);
-          dummy.updateMatrix();
-          previewMesh.setMatrixAt(idx, dummy.matrix);
-          
-          // Update character (randomly change some)
-          if (Math.random() > 0.98) {
-            const char = matrixState.glyphArray[Math.floor(Math.random() * matrixState.glyphArray.length)];
-            const glyph = matrixState.glyphMap.get(char);
-            
-            if (glyph) {
-              uvOffset[idx * 4 + 0] = glyph.x / matrixState.texW;
-              uvOffset[idx * 4 + 1] = (glyph.y + glyph.height) / matrixState.texH;
-              uvOffset[idx * 4 + 2] = glyph.width / matrixState.texW;
-              uvOffset[idx * 4 + 3] = -glyph.height / matrixState.texH;
-            }
-          }
-          
-          // Fade effect (brighter at BOTTOM/leading edge, darker at TOP/trailing)
-          const fadePosition = i / column.instanceIndices.length; // 0 at top, 1 at bottom
-          const brightness = 0.3 + fadePosition * 0.7; // Dark at top (0.3) -> bright at bottom (1.0)
-          
-          colors[idx * 3 + 0] = brightness * 0.15; // R (slight red tint)
-          colors[idx * 3 + 1] = brightness * 0.9; // G (main green)
-          colors[idx * 3 + 2] = brightness * 0.2; // B (slight blue tint)
-        }
-      }
-      
-      previewMesh.instanceMatrix.needsUpdate = true;
-      geometry.attributes.uvOffset.needsUpdate = true;
-      geometry.attributes.instanceColor.needsUpdate = true;
+      // Create matrix rain effect using shared module
+      matrixEffect = new MatrixRain(previewMesh, {
+        columns: 300,
+        charsPerColumn: 45,
+        spacing: 0.4,
+        charSize: 0.12,
+        speedMin: 0.015,
+        speedMax: 0.065,
+        viewHeight: 10,
+        densityFactor: 1.0
+      });
     }
     
     function stopMatrixMode() {
-      if (matrixState) {
-        matrixState.active = false;
-        matrixState = null;
+      if (matrixEffect) {
+        matrixEffect.stop();
+        matrixEffect.dispose();
+        matrixEffect = null;
+      }
+      
+      // Disable glow mode
+      if (previewMesh) {
+        previewMesh.disableGlow();
       }
     }
 
@@ -1074,8 +785,8 @@
         const value = parseFloat(e.target.value);
         thicknessValue.textContent = value.toFixed(2);
         
-        if (previewMesh && previewMesh.userData.material) {
-          previewMesh.userData.material.uniforms.thickness.value = value;
+        if (previewMesh && previewMesh.setGlobalThickness) {
+          previewMesh.setGlobalThickness(value);
         }
       });
       
@@ -1083,16 +794,14 @@
         const value = parseFloat(e.target.value);
         outlineWidthValue.textContent = value.toFixed(2);
         
-        if (previewMesh && previewMesh.userData.material) {
-          previewMesh.userData.material.uniforms.outlineWidth.value = value;
+        if (previewMesh && previewMesh.setGlobalOutlineThickness) {
+          previewMesh.setGlobalOutlineThickness(value);
         }
       });
       
       outlineColorPicker.addEventListener('input', (e) => {
-        const color = new THREE.Color(e.target.value);
-        
-        if (previewMesh && previewMesh.userData.material) {
-          previewMesh.userData.material.uniforms.outlineColor.value = color;
+        if (previewMesh && previewMesh.setGlobalOutlineColor) {
+          previewMesh.setGlobalOutlineColor(e.target.value);
         }
       });
       
@@ -1178,12 +887,72 @@
       showStatus(`✓ Downloaded JSON`, 'success');
     };
 
+    // Load an existing atlas for preview using MSDFString API
+    async function loadExistingAtlas(fontName) {
+      try {
+        log(`Loading existing atlas: ${fontName}...`, 'info');
+        
+        // Use MSDFString's unified font loading API
+        const fontData = await MSDFString.loadFont(fontName, '/atlases');
+        
+        // Convert texture to data URL for storage/download
+        const canvas = document.createElement('canvas');
+        canvas.width = fontData.texture.image.width;
+        canvas.height = fontData.texture.image.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(fontData.texture.image, 0, 0);
+        const textureDataUrl = canvas.toDataURL('image/png');
+        
+        // Store as generated data for download
+        generatedAtlasData.texture = textureDataUrl;
+        generatedAtlasData.atlas = fontData.data;
+        generatedAtlasData.fontName = fontName;
+        
+        // Display the atlas
+        displayAtlas(textureDataUrl, fontData.data);
+        
+        // Create a demo text mesh in the 3D scene
+        if (previewMesh) {
+          scene.remove(previewMesh);
+          previewMesh.geometry.dispose();
+          previewMesh.material.dispose();
+        }
+        
+        previewMesh = new MSDFString({
+          font: fontName,
+          text: 'MSDF Text\nAtlas Loaded!',
+          fontSize: 0.015,
+          align: 'center',
+          color: '#ffffff',
+          outlineColor: '#000000',
+          thickness: 0.5,
+          outlineThickness: 0.05
+        });
+        
+        scene.add(previewMesh);
+        
+        log(`✓ Loaded ${fontName} (${fontData.data.chars.length} glyphs)`, 'info');
+        showStatus(`✓ Loaded ${fontName}`, 'success');
+        
+        // Show download section
+        document.getElementById('downloadSection').classList.remove('hidden');
+      } catch (error) {
+        console.error('Failed to load existing atlas:', error);
+        log(`Could not load ${fontName}: ${error.message}`, 'info');
+      }
+    }
+
     // Initialize
     initThree();
     loadFonts();
     setupRenderingControls();
     
-    // Auto-generate Montserrat-Bold on load for debugging (only if ?debug=true)
+    // Auto-load Zenzai Itacha font on startup for immediate visual
+    setTimeout(() => {
+      loadExistingAtlas('Zenzai Itacha');
+    }, 500);
+    
+    // Auto-generate on load for debugging (only if ?debug=true)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('debug') === 'true') {
       setTimeout(() => {

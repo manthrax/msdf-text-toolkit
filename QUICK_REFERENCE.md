@@ -1,5 +1,45 @@
 # MSDF Text Toolkit - Quick Reference
 
+## Font Loading API
+
+### Static Methods
+
+```javascript
+// Load and cache a font atlas (async)
+await MSDFString.loadFont('Montserrat-Bold', '/atlases');
+
+// Get a cached font (sync)
+const fontData = MSDFString.getFont('Montserrat-Bold');
+
+// Clear all cached fonts
+MSDFString.clearFontCache();
+```
+
+### Creating Text
+
+```javascript
+// Option 1: Use font by name (requires prior loading)
+await MSDFString.loadFont('Montserrat-Bold', '/atlases');
+const text = new MSDFString({
+  font: 'Montserrat-Bold',  // Font name - uses cache
+  text: 'Hello World!',
+  color: '#00ff88',
+  thickness: 0.5,
+  maxLength: 100  // Optional: initial capacity (auto-resizes if exceeded)
+});
+
+// Option 2: Pass font object directly
+const fontData = { texture: myTexture, data: myAtlasData };
+const text = new MSDFString({
+  font: fontData,
+  text: 'Hello World!',
+  color: '#00ff88'
+});
+
+// Note: maxLength is just an optimistic starting size
+// The mesh automatically resizes if text exceeds capacity
+```
+
 ## 🚀 Common Commands
 
 ### Start Generator Server
@@ -233,4 +273,5 @@ textRenderer.createText({ fontName: 'body', ... });
 ---
 
 *For detailed documentation, see README.md*
+
 

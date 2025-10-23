@@ -40,6 +40,7 @@ const uiPath = join(__dirname, '../ui');
 const fontsPath = join(__dirname, '../fonts');
 const atlasesPath = join(__dirname, '../../atlases');
 const examplesPath = join(__dirname, '../../examples');
+const libPath = join(__dirname, '../../lib');
 
 app.use(express.static(uiPath));
 
@@ -51,6 +52,9 @@ app.use('/atlases', express.static(atlasesPath));
 
 // Serve examples directory
 app.use('/examples', express.static(examplesPath));
+
+// Serve lib directory (for MSDFString, shaders, etc.)
+app.use('/lib', express.static(libPath));
 
 // Serve index.html as the default root page
 app.get('/', (req, res) => {
