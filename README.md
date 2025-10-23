@@ -53,34 +53,31 @@ Then open http://localhost:3001 in your browser to generate atlases from your fo
 <body>
   <script type="module">
     import * as THREE from 'three';
-    import { MSDFTextRenderer, solidColor } from './lib/MSDFTextRenderer.js';
+    import { MSDFString } from './lib/MSDFString.js';
 
     // Setup scene
     const scene = new THREE.Scene();
-    const textRenderer = new MSDFTextRenderer(scene);
 
-    // Load font
-    await textRenderer.loadFont(
-      'myFont',
-      'atlases/MyFont.png',
-      'atlases/MyFont.json'
-    );
+    // Load font (cached for reuse)
+    await MSDFString.loadFont('MyFont', '/atlases');
 
     // Create text
-    const { id, mesh } = textRenderer.createText({
-      fontName: 'myFont',
+    const textMesh = new MSDFString({
+      font: 'MyFont',
       text: 'Hello World!',
-      scale: 0.01,
-      thickness: 0.5,
-      colorFunction: solidColor(0x60a5fa)
+      fontSize: 0.01,
+      color: '#60a5fa',
+      thickness: 0.5
     });
 
+    scene.add(textMesh);
+
     // Update text later
-    textRenderer.updateText(id, 'New Text!');
-    textRenderer.updateParams(id, {
-      outlineWidth: 0.1,
-      outlineColor: 0x000000
-    });
+    textMesh.setText('New Text!');
+    
+    // Update appearance
+    textMesh.setGlobalOutlineThickness(0.1);
+    textMesh.setGlobalOutlineColor('#000000');
   </script>
 </body>
 </html>
@@ -99,104 +96,121 @@ msdf-text-toolkit/
 │   │   └── index.html
 │   └── fonts/             # Font files for generation
 ├── lib/                   # Reusable rendering library
-│   ├── MSDFTextRenderer.js  # Main API
+│   ├── MSDFString.js        # Main text rendering class
 │   ├── shaders.js           # GLSL shaders
-│   └── utils.js             # Helper functions
+│   ├── threeHelpers.js      # Three.js utilities
+│   ├── uiHelpers.js         # UI interaction helpers
+│   ├── textPreview.js       # Text preview utilities
+│   ├── demo-styles.css      # Shared styles
+│   └── effects/
+│       └── matrixRain.js    # Matrix rain effect
 ├── examples/              # Usage examples
-│   ├── basic.html         # Basic text rendering
-│   └── matrix.html        # Matrix digital rain effect
+│   ├── basic.html         # Basic text rendering with interactive controls
+│   └── matrix-mode.html   # Matrix digital rain effect
 ├── atlases/               # Generated MSDF atlases
 └── README.md
 ```
 
 ## API Reference
 
-### MSDFTextRenderer
+### MSDFString
+
+Main class for rendering MSDF text with Three.js.
+
+#### Static Methods
+
+##### `MSDFString.loadFont(fontName, basePath)`
+Load and cache a font atlas.
+
+```javascript
+await MSDFString.loadFont('MyFont', '/atlases');
+// Font is now cached and ready to use
+```
+
+##### `MSDFString.getFont(fontName)`
+Get a cached font (returns null if not loaded).
+
+```javascript
+const fontData = MSDFString.getFont('MyFont');
+```
 
 #### Constructor
 ```javascript
-const renderer = new MSDFTextRenderer(scene);
-```
-
-#### loadFont(fontName, atlasImageUrl, atlasDataUrl)
-Load an MSDF font atlas.
-
-```javascript
-await renderer.loadFont('myFont', 'path/to/atlas.png', 'path/to/atlas.json');
-```
-
-#### createText(options)
-Create a new text mesh.
-
-```javascript
-const { id, mesh } = renderer.createText({
-  fontName: 'myFont',        // Required: Name of loaded font
-  text: 'Hello!',            // Required: Text content
-  scale: 0.01,               // Optional: Scale factor (default: 0.01)
-  thickness: 0.5,            // Optional: Text thickness 0-1 (default: 0.5)
-  smoothness: 0.05,          // Optional: Edge smoothness (default: 0.05)
-  outlineWidth: 0.0,         // Optional: Outline width (default: 0.0)
-  outlineColor: 0x000000,    // Optional: Outline color (default: black)
-  colorFunction: (i, total) => color  // Optional: Per-char coloring
+const textMesh = new MSDFString({
+  font: 'MyFont',              // Font name (must be loaded first)
+  text: 'Hello World!',        // Text to display
+  fontSize: 0.01,              // Font size (default: 1.0)
+  align: 'left',               // 'left', 'center', or 'right'
+  color: '#ffffff',            // Text color
+  outlineColor: '#000000',     // Outline/glow color
+  thickness: 0.5,              // Text thickness 0-1
+  outlineThickness: 0.0,       // Outline/glow thickness
+  maxLength: 100               // Initial capacity (grows dynamically)
 });
 ```
 
-#### updateText(id, newText)
-Update the text content of an existing mesh.
+#### Instance Methods
+
+##### `setText(text, options)`
+Update the text content.
 
 ```javascript
-renderer.updateText(id, 'New text content!');
+textMesh.setText('New Text!');
+// or with options:
+textMesh.setText('New Text!', { fontSize: 0.015, align: 'center' });
 ```
 
-#### updateParams(id, params)
-Update rendering parameters without recreating the mesh.
-
+##### Global Controls (affect all characters)
 ```javascript
-renderer.updateParams(id, {
-  thickness: 0.6,
-  outlineWidth: 0.1,
-  outlineColor: 0xff0000
+textMesh.setGlobalColor('#ff0000');
+textMesh.setGlobalOutlineColor('#00ff00');
+textMesh.setGlobalThickness(0.6);
+textMesh.setGlobalOutlineThickness(0.1);
+```
+
+##### Glow Mode
+```javascript
+textMesh.enableGlow();   // Soft alpha fade
+textMesh.disableGlow();  // Hard outline
+textMesh.setGlobalGlowMode(0.5); // 0.0 = hard, 1.0 = glow
+```
+
+##### Per-Character Controls
+```javascript
+textMesh.setCharacterColor(index, '#ff0000', 1.0);
+textMesh.setCharacterOutlineColor(index, '#00ff00', 1.0);
+textMesh.setCharacterThickness(index, 0.8, 0.1);
+textMesh.setCharacterGlowMode(index, true); // or false
+```
+
+##### Utility Methods
+```javascript
+textMesh.getText();              // Get current text
+textMesh.getLength();            // Get character count
+textMesh.resetCharacterAttributes(); // Reset all per-char styling
+```
+
+### Helper Modules
+
+#### `textPreview.js`
+```javascript
+import { applyRainbowGradient, applyGradient } from './lib/textPreview.js';
+
+applyRainbowGradient(textMesh);
+applyGradient(textMesh, '#ff0000', '#0000ff');
+```
+
+#### `effects/matrixRain.js`
+```javascript
+import { MatrixRain } from './lib/effects/matrixRain.js';
+
+const effect = new MatrixRain(textMesh, {
+  columns: 300,
+  charsPerColumn: 45
 });
-```
 
-#### removeText(id)
-Remove a text mesh.
-
-```javascript
-renderer.removeText(id);
-```
-
-#### dispose()
-Clean up all resources.
-
-```javascript
-renderer.dispose();
-```
-
-### Color Functions
-
-#### solidColor(color)
-Creates a solid color function.
-
-```javascript
-import { solidColor } from './lib/MSDFTextRenderer.js';
-colorFunction: solidColor(0x60a5fa)
-```
-
-#### rainbowGradient(index, total)
-Creates a rainbow gradient across characters.
-
-```javascript
-import { rainbowGradient } from './lib/MSDFTextRenderer.js';
-colorFunction: rainbowGradient
-```
-
-#### alternatingColors(...colors)
-Alternates between provided colors.
-
-```javascript
-import { alternatingColors } from './lib/MSDFTextRenderer.js';
-colorFunction: alternatingColors(0xff0000, 0x00ff00, 0x0000ff)
+// In animation loop:
+effect.update();
 ```
 
 ## Generator Usage

@@ -9,7 +9,7 @@ The MSDF font generation and rendering system has been successfully extracted fr
 ```
 msdf-text-toolkit/
 ├── lib/                           # 🎨 Reusable ES6 Modules
-│   ├── MSDFTextRenderer.js       # Main text rendering class (clean API)
+│   ├── MSDFString.js       # Main text rendering class (clean API)
 │   └── shaders.js                 # MSDF vertex & fragment shaders
 │
 ├── generator/                     # 🛠️ Atlas Generation Tools
@@ -53,9 +53,9 @@ Open http://localhost:3001 to generate atlases!
 ### 3. Use the Library
 
 ```javascript
-import { MSDFTextRenderer, solidColor } from './msdf-text-toolkit/lib/MSDFTextRenderer.js';
+import { MSDFString, solidColor } from './msdf-text-toolkit/lib/MSDFString.js';
 
-const textRenderer = new MSDFTextRenderer(scene);
+const textRenderer = new MSDFString(scene);
 
 // Load font
 await textRenderer.loadFont('myFont', 'atlases/font.png', 'atlases/font.json');
@@ -78,7 +78,7 @@ textRenderer.updateParams(id, { outlineWidth: 0.1 });
 
 ### Rendering Library (`lib/`)
 
-**MSDFTextRenderer.js** - Clean, documented API:
+**MSDFString.js** - Clean, documented API:
 - ✅ `loadFont()` - Load MSDF atlases
 - ✅ `createText()` - Create text meshes with options
 - ✅ `updateText()` - Change text content
@@ -172,12 +172,12 @@ npm install msdf-text-toolkit
 
 Then import:
 ```javascript
-import { MSDFTextRenderer } from './msdf-text-toolkit/lib/MSDFTextRenderer.js';
+import { MSDFString } from './msdf-text-toolkit/lib/MSDFString.js';
 ```
 
 ## 📊 File Sizes
 
-- **MSDFTextRenderer.js**: ~12KB (main library)
+- **MSDFString.js**: ~12KB (main library)
 - **shaders.js**: ~2KB (GLSL code)
 - **Total Library**: ~14KB uncompressed
 - **Generator UI**: ~35KB (standalone HTML)
@@ -190,7 +190,7 @@ import {
   solidColor,           // Solid color for all chars
   rainbowGradient,      // Rainbow across chars
   alternatingColors     // Cycle through colors
-} from './msdf-text-toolkit/lib/MSDFTextRenderer.js';
+} from './msdf-text-toolkit/lib/MSDFString.js';
 ```
 
 ## 🧪 Testing the Library

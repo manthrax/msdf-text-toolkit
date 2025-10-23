@@ -93,7 +93,7 @@ Create a new HTML file in the root directory:
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { MSDFTextRenderer, solidColor } from './msdf-text-toolkit/lib/MSDFTextRenderer.js';
+    import { MSDFString, solidColor } from './msdf-text-toolkit/lib/MSDFString.js';
 
     // Setup Three.js
     const scene = new THREE.Scene();
@@ -115,7 +115,7 @@ Create a new HTML file in the root directory:
     controls.enableDamping = true;
 
     // Create text renderer
-    const textRenderer = new MSDFTextRenderer(scene);
+    const textRenderer = new MSDFString(scene);
 
     // Load font and create text
     async function init() {
@@ -194,7 +194,7 @@ textRenderer.updateParams(id, {
 
 **Change colors:**
 ```javascript
-import { rainbowGradient } from './msdf-text-toolkit/lib/MSDFTextRenderer.js';
+import { rainbowGradient } from './msdf-text-toolkit/lib/MSDFString.js';
 
 colorFunction: rainbowGradient
 ```

@@ -67,24 +67,22 @@ npx http-server -p 8000
 ## 📝 Basic Usage Pattern
 
 ```javascript
-import { MSDFTextRenderer, solidColor } from './lib/MSDFTextRenderer.js';
+import { MSDFString } from './lib/MSDFString.js';
 
-// 1. Create renderer
-const textRenderer = new MSDFTextRenderer(scene);
+// 1. Load font (cached for reuse)
+await MSDFString.loadFont('MyFont', '/atlases');
 
-// 2. Load font
-await textRenderer.loadFont('myFont', 'atlas.png', 'atlas.json');
-
-// 3. Create text
-const { id, mesh } = textRenderer.createText({
-  fontName: 'myFont',
+// 2. Create text
+const textMesh = new MSDFString({
+  font: 'MyFont',
   text: 'Hello!',
-  scale: 0.01
+  fontSize: 0.01
 });
+scene.add(textMesh);
 
-// 4. Update (optional)
-textRenderer.updateText(id, 'New text');
-textRenderer.updateParams(id, { thickness: 0.6 });
+// 3. Update (optional)
+textMesh.setText('New text');
+textMesh.setGlobalThickness(0.6);
 ```
 
 ---
@@ -92,20 +90,24 @@ textRenderer.updateParams(id, { thickness: 0.6 });
 ## 🎨 Color Functions Cheat Sheet
 
 ```javascript
-import { solidColor, rainbowGradient, alternatingColors } from './lib/MSDFTextRenderer.js';
-
-// Solid color (hex or THREE.Color)
-colorFunction: solidColor(0x60a5fa)
+import { applyRainbowGradient, applyGradient } from './lib/textPreview.js';
 
 // Rainbow gradient
-colorFunction: rainbowGradient
+applyRainbowGradient(textMesh);
 
-// Alternating colors
-colorFunction: alternatingColors(0xff0000, 0x00ff00, 0x0000ff)
+// Two-color gradient
+applyGradient(textMesh, '#ff0000', '#0000ff');
 
-// Custom function
-colorFunction: (charIndex, totalChars) => {
-  return new THREE.Color(Math.random(), Math.random(), Math.random());
+// Solid color (set globally)
+textMesh.setGlobalColor('#60a5fa');
+
+// Per-character color
+textMesh.setCharacterColor(0, '#ff0000', 1.0);
+
+// Custom per-character coloring
+for (let i = 0; i < textMesh.getLength(); i++) {
+  const color = new THREE.Color(Math.random(), Math.random(), Math.random());
+  textMesh.setCharacterColor(i, color, 1.0);
 }
 ```
 
@@ -213,7 +215,7 @@ lsof -i :3001                 # Mac/Linux
 
 ```
 Load font from:     atlases/YourFont.png + .json
-Import library:     lib/MSDFTextRenderer.js
+Import library:     lib/MSDFString.js
 Server config:      generator/server/package.json
 Add fonts:          generator/fonts/
 View examples:      examples/

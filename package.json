@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "description": "Complete toolkit for generating and rendering high-quality text using MSDF in Three.js",
   "type": "module",
-  "main": "lib/MSDFTextRenderer.js",
+  "main": "lib/MSDFString.js",
   "exports": {
-    ".": "./lib/MSDFTextRenderer.js",
-    "./shaders": "./lib/shaders.js"
+    ".": "./lib/MSDFString.js",
+    "./shaders": "./lib/shaders.js",
+    "./threeHelpers": "./lib/threeHelpers.js",
+    "./uiHelpers": "./lib/uiHelpers.js",
+    "./textPreview": "./lib/textPreview.js",
+    "./effects/matrixRain": "./lib/effects/matrixRain.js"
   },
   "scripts": {
     "start": "cd generator/server && npm start",
