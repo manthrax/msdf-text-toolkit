@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSDF Text Renderer - Basic Example</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #0b0b0b;
+      color: #ddd;
+    }
+    canvas {
+      display: block;
+    }
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
+      border-radius: 5px;
+      max-width: 300px;
+    }
+    button {
+      margin: 5px;
+      padding: 8px 12px;
+      background: #60a5fa;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #3b82f6;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <h3>MSDF Text Renderer</h3>
+    <p>Basic usage example</p>
+    <button onclick="changeText()">Change Text</button>
+    <button onclick="addOutline()">Toggle Outline</button>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { MSDFTextRenderer, solidColor } from '../lib/MSDFTextRenderer.js';
+
+    // Setup Three.js scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0b0b);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 0, 5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Create text renderer
+    const textRenderer = new MSDFTextRenderer(scene);
+
+    let textId;
+    let hasOutline = false;
+
+    // Load font and create text
+    async function init() {
+      try {
+        // Load a generated font atlas
+        // NOTE: You need to generate this first using the generator!
+        await textRenderer.loadFont(
+          'demo-font',
+          '../atlases/Montserrat-Bold.png',  // Change to your generated atlas
+          '../atlases/Montserrat-Bold.json'   // Change to your generated atlas
+        );
+
+        // Create text with custom styling
+        const result = textRenderer.createText({
+          fontName: 'demo-font',
+          text: 'Hello MSDF Text!\nHigh Quality at Any Scale\n0123456789',
+          scale: 0.015,
+          thickness: 0.5,
+          smoothness: 0.05,
+          colorFunction: solidColor(0x60a5fa)
+        });
+
+        textId = result.id;
+        console.log('Text created with ID:', textId);
+
+      } catch (error) {
+        console.error('Failed to initialize:', error);
+        document.getElementById('info').innerHTML += `<p style="color: #f87171;">Error: ${error.message}</p><p>Make sure to generate an atlas first!</p>`;
+      }
+    }
+
+    // Change text content
+    window.changeText = function() {
+      if (textId === undefined) return;
+      const texts = [
+        'Hello MSDF Text!',
+        'Resolution Independent\nText Rendering',
+        'The quick brown fox\njumps over the lazy dog',
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789'
+      ];
+      const randomText = texts[Math.floor(Math.random() * texts.length)];
+      textRenderer.updateText(textId, randomText);
+    };
+
+    // Toggle outline
+    window.addOutline = function() {
+      if (textId === undefined) return;
+      hasOutline = !hasOutline;
+      textRenderer.updateParams(textId, {
+        outlineWidth: hasOutline ? 0.1 : 0.0,
+        outlineColor: 0x000000
+      });
+    };
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Start
+    init();
+    animate();
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,42 @@
+{
+  "name": "msdf-text-toolkit",
+  "version": "1.0.0",
+  "description": "Complete toolkit for generating and rendering high-quality text using MSDF in Three.js",
+  "type": "module",
+  "main": "lib/MSDFTextRenderer.js",
+  "exports": {
+    ".": "./lib/MSDFTextRenderer.js",
+    "./shaders": "./lib/shaders.js"
+  },
+  "scripts": {
+    "start": "cd generator/server && npm start",
+    "dev": "cd generator/server && npm run dev",
+    "install-server": "cd generator/server && npm install"
+  },
+  "keywords": [
+    "msdf",
+    "sdf",
+    "text",
+    "rendering",
+    "three.js",
+    "threejs",
+    "font",
+    "atlas",
+    "distance-field",
+    "gpu",
+    "webgl"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "three": ">=0.160.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
+

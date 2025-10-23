@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSDF Generator - Native Backend</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0b0b;
+      color: #ddd;
+      overflow: hidden;
+    }
+
+    #container {
+      display: grid;
+      grid-template-columns: 350px 1fr;
+      height: 100vh;
+    }
+
+    #sidebar {
+      background: #161616;
+      border-right: 1px solid #333;
+      overflow-y: auto;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .section {
+      margin-bottom: 25px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #999;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 5px;
+      color: #aaa;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="file"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 10px;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #ddd;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+
+    input[type="file"] {
+      padding: 6px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-bottom: 12px;
+      accent-color: #60a5fa;
+    }
+
+    input[type="color"] {
+      width: 100%;
+      height: 40px;
+      padding: 2px;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+
+    textarea {
+      font-family: 'Courier New', monospace;
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    label span {
+      float: right;
+      color: #60a5fa;
+      font-weight: 600;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #60a5fa;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #3b82f6;
+    }
+
+    button:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
+
+    .preset-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .preset-buttons button {
+      font-size: 12px;
+      padding: 8px;
+    }
+
+    #viewer {
+      position: relative;
+      background: #0b0b0b;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #status {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      max-width: 400px;
+      backdrop-filter: blur(10px);
+    }
+
+    #status.error {
+      background: rgba(220, 38, 38, 0.9);
+    }
+
+    #status.success {
+      background: rgba(34, 197, 94, 0.9);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #log {
+      background: #0a0a0a;
+      padding: 12px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: #888;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .log-line {
+      margin: 2px 0;
+    }
+
+    .log-line.info {
+      color: #60a5fa;
+    }
+
+    .log-line.error {
+      color: #f87171;
+    }
+
+    #spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(11, 11, 11, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      display: none;
+    }
+
+    #spinner.active {
+      display: flex;
+    }
+
+    .spinner-ring {
+      border: 4px solid #333;
+      border-top: 4px solid #60a5fa;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .spinner-text {
+      color: #ddd;
+      margin-top: 1.5rem;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .help-text {
+      font-size: 11px;
+      color: #666;
+      margin-top: -8px;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="sidebar">
+      <h1>MSDF Generator</h1>
+      
+      <div class="section">
+        <div class="section-title">Font Source</div>
+        
+        <label for="fontFile">Upload Font</label>
+        <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2">
+        <div class="help-text">or select from project fonts below</div>
+        
+        <label for="fontSelect">Project Fonts</label>
+        <select id="fontSelect">
+          <option value="">-- Select font --</option>
+        </select>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Presets</div>
+        <div class="preset-buttons">
+          <button onclick="applyPreset('default')">Default</button>
+          <button onclick="applyPreset('mtsdf')">MTSDF</button>
+          <button onclick="applyPreset('production')">Production</button>
+          <button onclick="applyPreset('mobile')">Mobile</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Atlas Settings</div>
+        
+        <label for="fieldType">Field Type</label>
+        <select id="fieldType">
+          <option value="msdf">MSDF (Multi-channel)</option>
+          <option value="sdf">SDF (Single-channel)</option>
+          <option value="psdf">PSDF (Pseudo-distance)</option>
+        </select>
+        <div class="help-text">MSDF recommended for most uses</div>
+        
+        <label for="fontSize">Font Size (px)</label>
+        <input type="number" id="fontSize" value="42" min="12" max="128">
+        
+        <label for="textureWidth">Atlas Width</label>
+        <input type="number" id="textureWidth" value="1024" step="256" min="256" max="4096">
+        
+        <label for="textureHeight">Atlas Height</label>
+        <input type="number" id="textureHeight" value="1024" step="256" min="256" max="4096">
+        
+        <label for="distanceRange">Distance Range</label>
+        <input type="number" id="distanceRange" value="4" min="1" max="16" step="0.5">
+      </div>
+
+      <div class="section">
+        <div class="section-title">Character Set</div>
+        <label for="charset">Characters to Include</label>
+        <textarea id="charset" placeholder="Leave empty for ASCII printable"></textarea>
+        <div class="help-text">Default: all ASCII printable (space through ~)</div>
+      </div>
+
+      <button id="generateBtn" onclick="generate()">Generate Atlas</button>
+
+      <div id="downloadSection" class="section hidden">
+        <div class="section-title">Download Atlas</div>
+        <button onclick="downloadAtlasPNG()" style="margin-bottom: 8px;">
+          📥 Download PNG
+        </button>
+        <button onclick="downloadAtlasJSON()">
+          📥 Download JSON
+        </button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Text Rendering</div>
+        
+        <label for="thickness">Thickness: <span id="thicknessValue">0.50</span></label>
+        <input type="range" id="thickness" min="0" max="1" step="0.01" value="0.5">
+        
+        <label for="outlineWidth">Outline Width: <span id="outlineWidthValue">0.00</span></label>
+        <input type="range" id="outlineWidth" min="0" max="0.3" step="0.01" value="0">
+        
+        <label for="outlineColor">Outline Color</label>
+        <input type="color" id="outlineColor" value="#000000">
+        
+        <label style="display: flex; align-items: center; margin-top: 8px;">
+          <input type="checkbox" id="matrixMode" style="width: auto; margin-right: 8px;">
+          <span style="float: none;">Matrix Mode 🟢</span>
+        </label>
+      </div>
+
+      <div id="log" class="hidden"></div>
+    </div>
+
+    <div id="viewer">
+      <div id="canvas-container"></div>
+      <div id="status" class="hidden"></div>
+    </div>
+  </div>
+
+  <div id="spinner">
+    <div class="spinner-ring"></div>
+    <div class="spinner-text">Generating atlas...</div>
+    <small style="color:#9aa;margin-top:0.5rem;">This may take a moment</small>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const API_URL = 'http://localhost:3001/api';
+    
+    let scene, camera, renderer, controls;
+    let currentAtlas = null;
+    let previewMesh = null;
+    let matrixState = null; // Matrix animation state
+    
+    // Store generated atlas data for download
+    let generatedAtlasData = {
+      texture: null,
+      atlas: null,
+      fontName: null
+    };
+
+    // Initialize Three.js
+    function initThree() {
+      const container = document.getElementById('canvas-container');
+      
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0b0b0b);
+      
+      camera = new THREE.PerspectiveCamera(
+        50,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(0, 0, 5);
+      
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      container.appendChild(renderer.domElement);
+      
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      
+      window.addEventListener('resize', onResize);
+      animate();
+    }
+
+    function onResize() {
+      const container = document.getElementById('canvas-container');
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      
+      // Update Matrix animation if active
+      if (matrixState && matrixState.active) {
+        updateMatrixAnimation();
+      }
+      
+      renderer.render(scene, camera);
+    }
+
+    // Load available fonts
+    async function loadFonts() {
+      try {
+        const response = await fetch(`${API_URL}/fonts`);
+        const data = await response.json();
+        const select = document.getElementById('fontSelect');
+        data.fonts.forEach(font => {
+          const option = document.createElement('option');
+          option.value = `fonts/${font}`;
+          option.textContent = font;
+          select.appendChild(option);
+        });
+        
+        // Auto-generate Montserrat-Bold for debugging
+        setTimeout(() => {
+          const montserrat = data.fonts.find(f => f.includes('Montserrat-Bold'));
+          if (montserrat) {
+            select.value = `fonts/${montserrat}`;
+            setTimeout(() => generate(), 100);
+          }
+        }, 200);
+      } catch (error) {
+        log(`Failed to load fonts: ${error.message}`, 'error');
+      }
+    }
+
+    // Generate atlas
+    window.generate = async function() {
+      const fileInput = document.getElementById('fontFile');
+      const fontSelect = document.getElementById('fontSelect');
+      
+      let fontFile = fileInput.files[0];
+      let fontPath = fontSelect.value;
+      
+      if (!fontFile && !fontPath) {
+        showStatus('Please select or upload a font file', 'error');
+        return;
+      }
+      
+      // If using project font, need to fetch it first
+      if (!fontFile && fontPath) {
+        try {
+          // fontPath is like "fonts/Montserrat-Bold.ttf"
+          // Static files are served from msdf-generator-browser/ root
+          const response = await fetch(`/${fontPath}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const blob = await response.blob();
+          fontFile = new File([blob], fontPath.split('/').pop(), { type: 'font/ttf' });
+        } catch (error) {
+          showStatus(`Failed to load font: ${error.message}`, 'error');
+          log(`Font fetch error: ${error.message}`, 'error');
+          return;
+        }
+      }
+      
+      const options = {
+        fieldType: document.getElementById('fieldType').value,
+        fontSize: document.getElementById('fontSize').value,
+        textureWidth: document.getElementById('textureWidth').value,
+        textureHeight: document.getElementById('textureHeight').value,
+        distanceRange: document.getElementById('distanceRange').value,
+        charset: document.getElementById('charset').value || undefined
+      };
+      
+      const formData = new FormData();
+      formData.append('font', fontFile);
+      formData.append('options', JSON.stringify(options));
+      
+      showSpinner(true);
+      clearLog();
+      log('Sending generation request to server...', 'info');
+      
+      try {
+        const response = await fetch(`${API_URL}/generate`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+        
+        log('Atlas generated successfully!', 'info');
+        log(`Glyphs: ${result.atlas.chars.length}`, 'info');
+        
+        // Store atlas data for download
+        generatedAtlasData.texture = result.texture;
+        generatedAtlasData.atlas = result.atlas;
+        generatedAtlasData.fontName = fontFile.name.replace(/\.[^/.]+$/, ''); // Remove extension
+        
+        // Display atlas
+        displayAtlas(result.texture, result.atlas);
+        showStatus(`✓ Generated ${result.atlas.chars.length} glyphs`, 'success');
+        
+        // Show download section
+        document.getElementById('downloadSection').classList.remove('hidden');
+        
+      } catch (error) {
+        log(`Generation failed: ${error.message}`, 'error');
+        showStatus(`✗ Generation failed: ${error.message}`, 'error');
+      } finally {
+        showSpinner(false);
+      }
+    };
+
+    // MSDF Shaders
+    const msdfVertexShader = `
+      attribute vec4 uvOffset; // x, y = offset in atlas; z, w = width, height
+      attribute vec3 instanceColor; // per-instance color
+      
+      varying vec2 vUv;
+      varying vec3 vColor;
+      
+      void main() {
+        // Calculate UV coordinates for this glyph
+        vUv = vec2(
+          uvOffset.x + uv.x * uvOffset.z,
+          uvOffset.y + uv.y * uvOffset.w
+        );
+        
+        // Pass per-instance color to fragment shader
+        vColor = instanceColor;
+        
+        // Standard Three.js transformation pipeline
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const msdfFragmentShader = `
+      uniform sampler2D msdfTexture;
+      uniform float thickness;
+      uniform float smoothness;
+      uniform float outlineWidth;
+      uniform vec3 outlineColor;
+      
+      varying vec2 vUv;
+      varying vec3 vColor;
+
+      float median(float r, float g, float b) {
+        return max(min(r, g), min(max(r, g), b));
+      }
+
+      void main() {
+        // Sample MSDF texture
+        vec3 msd = texture2D(msdfTexture, vUv).rgb;
+        float sd = median(msd.r, msd.g, msd.b);
+        
+        // Improved antialiasing using fractional derivatives from MSDF
+        // Use the spread of RGB channels to estimate anisotropic filtering
+        vec2 Jdx = dFdx(msd.rg);
+        vec2 Jdy = dFdy(msd.rg);
+        float pixelDist = sqrt(dot(Jdx, Jdx) + dot(Jdy, Jdy));
+        float w = max(pixelDist, 0.0001); // Avoid division by zero
+        
+        // Calculate signed distance in screen pixels
+        float screenPxDistance = (sd - 0.5) / w;
+        
+        // Inner edge (fill boundary)
+        float innerEdge = thickness;
+        float innerDist = (sd - innerEdge) / w;
+        float innerAlpha = clamp(innerDist + 0.5, 0.0, 1.0);
+        innerAlpha = smoothstep(0.5 - smoothness, 0.5 + smoothness, innerAlpha);
+        
+        // Outer edge (outline boundary)
+        float outerEdge = thickness - outlineWidth;
+        float outerDist = (sd - outerEdge) / w;
+        float outerAlpha = clamp(outerDist + 0.5, 0.0, 1.0);
+        outerAlpha = smoothstep(0.5 - smoothness, 0.5 + smoothness, outerAlpha);
+        
+        // Outline mask: area between outer and inner edges
+        float outlineMask = outerAlpha * (1.0 - innerAlpha);
+        
+        // Blend fill color with outline color
+        vec3 finalColor = mix(vColor, outlineColor, outlineMask);
+        float finalAlpha = outerAlpha;
+        
+        if (finalAlpha < 0.01) discard;
+        
+        gl_FragColor = vec4(finalColor, finalAlpha);
+      }
+    `;
+    
+    // Generate instanced mesh for text
+    function generateTextMesh(text, atlasData, atlasTexture) {
+      if (!atlasData || !atlasTexture) return null;
+      
+      // Build glyph lookup from BMFont format
+      const glyphMap = new Map();
+      const texW = atlasData.common.scaleW; // Texture width in pixels
+      const texH = atlasData.common.scaleH; // Texture height in pixels
+      
+      for (const charData of atlasData.chars) {
+        const char = String.fromCharCode(charData.id);
+        glyphMap.set(char, charData);
+      }
+      
+      const lines = text.split('\n');
+      const fontSize = atlasData.info.size;
+      const scale = 0.01; // Scale factor to convert font units to world units
+      const lineHeight = atlasData.common.lineHeight * scale;
+      
+      let totalChars = 0;
+      for (const line of lines) {
+        totalChars += line.length;
+      }
+      
+      if (totalChars === 0) return null;
+      
+      // Create instanced geometry
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          msdfTexture: { value: atlasTexture },
+          thickness: { value: 0.5 },
+          smoothness: { value: 0.05 },
+          outlineWidth: { value: 0.0 },
+          outlineColor: { value: new THREE.Color(0x000000) }
+        },
+        vertexShader: msdfVertexShader,
+        fragmentShader: msdfFragmentShader,
+        transparent: true,
+        depthTest: true, // Enable for proper 3D depth sorting
+        depthWrite: true // Write to depth buffer for correct occlusion
+      });
+
+      const mesh = new THREE.InstancedMesh(geometry, material, totalChars);
+      
+      // Store material reference for UI updates
+      mesh.userData.material = material;
+
+      // Layout glyphs
+      const dummy = new THREE.Object3D();
+      const uvOffset = new Float32Array(totalChars * 4);
+      const instanceColors = new Float32Array(totalChars * 3); // RGB per instance
+      
+      let idx = 0;
+      
+      for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+        const line = lines[lineIdx];
+        
+        // Calculate line width for centering
+        let lineWidth = 0;
+        for (const char of line) {
+          const glyph = glyphMap.get(char);
+          if (glyph) {
+            lineWidth += glyph.xadvance * scale;
+          } else {
+            lineWidth += fontSize * scale * 0.3;
+          }
+        }
+        
+        let xOffset = -lineWidth / 2;
+        const yOffset = (lines.length / 2 - lineIdx - 0.5) * lineHeight;
+        
+        for (const char of line) {
+          const glyph = glyphMap.get(char);
+          
+          if (!glyph) {
+            xOffset += fontSize * scale * 0.3;
+            continue;
+          }
+          
+          // Glyph dimensions in world units
+          const glyphWidth = glyph.width * scale;
+          const glyphHeight = glyph.height * scale;
+          
+          // Position with offsets for proper alignment
+          const xPos = xOffset + glyph.xoffset * scale + glyphWidth / 2;
+          const yPos = yOffset - glyph.yoffset * scale - glyphHeight / 2;
+          
+          dummy.position.set(xPos, yPos, 0);
+          dummy.scale.set(glyphWidth, glyphHeight, 1);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(idx, dummy.matrix);
+
+          // UV coordinates (normalized 0-1)
+          // BMFont uses top-left origin, WebGL uses bottom-left, so flip V coordinate
+          uvOffset[idx * 4 + 0] = glyph.x / texW;                        // U start (left)
+          uvOffset[idx * 4 + 1] = (glyph.y + glyph.height) / texH;       // V start (bottom, flipped)
+          uvOffset[idx * 4 + 2] = glyph.width / texW;                    // U size
+          uvOffset[idx * 4 + 3] = -glyph.height / texH;                  // V size (negative to flip)
+          
+          // Per-instance color (rainbow gradient for demo)
+          const hue = (idx / totalChars) * 360;
+          const color = new THREE.Color().setHSL(hue / 360, 0.8, 0.6);
+          instanceColors[idx * 3 + 0] = color.r;
+          instanceColors[idx * 3 + 1] = color.g;
+          instanceColors[idx * 3 + 2] = color.b;
+          
+          xOffset += glyph.xadvance * scale;
+          idx++;
+        }
+      }
+      
+      // Hide unused instances
+      for (let i = idx; i < totalChars; i++) {
+        dummy.position.set(0, 0, -1000);
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+        
+        // Default color for hidden instances
+        instanceColors[i * 3 + 0] = 1.0;
+        instanceColors[i * 3 + 1] = 1.0;
+        instanceColors[i * 3 + 2] = 1.0;
+      }
+
+      geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 4));
+      geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instanceColors, 3));
+      mesh.instanceMatrix.needsUpdate = true;
+
+      return mesh;
+    }
+
+    // Matrix Mode Animation
+    function initMatrixMode() {
+      if (!previewMesh || !currentAtlas) return;
+      
+      const instanceCount = previewMesh.geometry.attributes.uvOffset.count;
+      const glyphMap = new Map();
+      
+      // Build glyph map
+      for (const charData of currentAtlas.data.chars) {
+        const char = String.fromCharCode(charData.id);
+        glyphMap.set(char, charData);
+      }
+      
+      const glyphArray = Array.from(glyphMap.keys());
+      const texW = currentAtlas.data.common.scaleW;
+      const texH = currentAtlas.data.common.scaleH;
+      const scale = 0.01;
+      
+      // Initialize Matrix state for each glyph
+      matrixState = {
+        active: true,
+        instanceCount,
+        columns: [],
+        glyphMap,
+        glyphArray,
+        texW,
+        texH,
+        scale
+      };
+      
+      // Create columns in 3D space (streams of characters)
+      const numColumns = 90; // Reduced to fit instance count
+      const charsPerColumn = 15; // Each column has a trail of characters
+      const gridSize = Math.ceil(Math.sqrt(numColumns)); // Square grid
+      const spacing = 1.2; // Distance between columns in 3D
+      const gridWidth = gridSize * spacing;
+      const viewHeight = 10; // Taller view
+      
+      let instanceIdx = 0;
+      for (let i = 0; i < numColumns && instanceIdx < instanceCount; i++) {
+        const columnLength = charsPerColumn;
+        
+        // Position columns in a 3D grid
+        const gridX = i % gridSize;
+        const gridZ = Math.floor(i / gridSize);
+        
+        const column = {
+          x: -gridWidth / 2 + gridX * spacing, // Grid X position
+          y: viewHeight / 2 + Math.random() * 5, // Random start height
+          z: -gridWidth / 2 + gridZ * spacing, // Grid Z position (depth!)
+          speed: 0.015 + Math.random() * 0.05, // Speed variation
+          length: columnLength,
+          chars: [],
+          instanceIndices: []
+        };
+        
+        // Assign multiple instances to this column for the trail effect
+        for (let j = 0; j < columnLength && instanceIdx < instanceCount; j++) {
+          column.instanceIndices.push(instanceIdx);
+          column.chars.push(glyphArray[Math.floor(Math.random() * glyphArray.length)]);
+          instanceIdx++;
+        }
+        
+        matrixState.columns.push(column);
+      }
+      
+      // Set initial green colors
+      const geometry = previewMesh.geometry;
+      const colors = geometry.attributes.instanceColor.array;
+      for (let i = 0; i < instanceCount; i++) {
+        const brightness = 0.3 + Math.random() * 0.7;
+        colors[i * 3 + 0] = 0.0; // R
+        colors[i * 3 + 1] = brightness; // G
+        colors[i * 3 + 2] = 0.0; // B
+      }
+      geometry.attributes.instanceColor.needsUpdate = true;
+    }
+    
+    function updateMatrixAnimation() {
+      if (!matrixState || !previewMesh) return;
+      
+      const dummy = new THREE.Object3D();
+      const geometry = previewMesh.geometry;
+      const uvOffset = geometry.attributes.uvOffset.array;
+      const colors = geometry.attributes.instanceColor.array;
+      const charSize = 0.12; // Smaller characters for denser effect
+      
+      for (const column of matrixState.columns) {
+        // Update column position
+        column.y -= column.speed;
+        
+        // Reset column when it goes too far down
+        if (column.y < -6) {
+          column.y = 6 + Math.random() * 4;
+          column.speed = 0.015 + Math.random() * 0.05;
+          
+          // Randomize characters
+          for (let i = 0; i < column.chars.length; i++) {
+            if (Math.random() > 0.7) {
+              column.chars[i] = matrixState.glyphArray[
+                Math.floor(Math.random() * matrixState.glyphArray.length)
+              ];
+            }
+          }
+        }
+        
+        // Update each character in the column
+        for (let i = 0; i < column.instanceIndices.length; i++) {
+          const idx = column.instanceIndices[i];
+          const charY = column.y - (i * charSize * 0.85); // Tighter vertical spacing
+          
+          // Position in 3D space!
+          dummy.position.set(column.x, charY, column.z);
+          dummy.scale.set(charSize, charSize, 1);
+          dummy.updateMatrix();
+          previewMesh.setMatrixAt(idx, dummy.matrix);
+          
+          // Update character (randomly change some)
+          if (Math.random() > 0.98) {
+            const char = matrixState.glyphArray[Math.floor(Math.random() * matrixState.glyphArray.length)];
+            const glyph = matrixState.glyphMap.get(char);
+            
+            if (glyph) {
+              uvOffset[idx * 4 + 0] = glyph.x / matrixState.texW;
+              uvOffset[idx * 4 + 1] = (glyph.y + glyph.height) / matrixState.texH;
+              uvOffset[idx * 4 + 2] = glyph.width / matrixState.texW;
+              uvOffset[idx * 4 + 3] = -glyph.height / matrixState.texH;
+            }
+          }
+          
+          // Fade effect (brighter at BOTTOM/leading edge, darker at TOP/trailing)
+          const fadePosition = i / column.instanceIndices.length; // 0 at top, 1 at bottom
+          const brightness = 0.3 + fadePosition * 0.7; // Dark at top (0.3) -> bright at bottom (1.0)
+          
+          colors[idx * 3 + 0] = brightness * 0.15; // R (slight red tint)
+          colors[idx * 3 + 1] = brightness * 0.9; // G (main green)
+          colors[idx * 3 + 2] = brightness * 0.2; // B (slight blue tint)
+        }
+      }
+      
+      previewMesh.instanceMatrix.needsUpdate = true;
+      geometry.attributes.uvOffset.needsUpdate = true;
+      geometry.attributes.instanceColor.needsUpdate = true;
+    }
+    
+    function stopMatrixMode() {
+      if (matrixState) {
+        matrixState.active = false;
+        matrixState = null;
+      }
+    }
+
+    // Display atlas in 3D view
+    function displayAtlas(textureDataUrl, atlasData) {
+      // Stop Matrix mode if active
+      stopMatrixMode();
+      const matrixCheckbox = document.getElementById('matrixMode');
+      if (matrixCheckbox) matrixCheckbox.checked = false;
+      
+      // Remove old meshes
+      if (previewMesh) {
+        scene.remove(previewMesh);
+        previewMesh.geometry.dispose();
+        previewMesh.material.dispose();
+      }
+      if (window.atlasPlane) {
+        scene.remove(window.atlasPlane);
+        window.atlasPlane.geometry.dispose();
+        window.atlasPlane.material.dispose();
+      }
+      
+      // Load texture
+      const loader = new THREE.TextureLoader();
+      const texture = loader.load(textureDataUrl);
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.minFilter = THREE.LinearMipMapLinearFilter; // Trilinear filtering for better far-distance quality
+      texture.magFilter = THREE.LinearFilter;
+      texture.flipY = false;
+      texture.generateMipmaps = true; // Ensure mipmaps are generated
+      // Store atlas
+      currentAtlas = { texture, data: atlasData };
+      
+      // Create atlas preview plane (at the back)
+      const atlasGeo = new THREE.PlaneGeometry(4, 4);
+      const atlasMat = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.3
+      });
+      window.atlasPlane = new THREE.Mesh(atlasGeo, atlasMat);
+      window.atlasPlane.position.z = -5;
+      scene.add(window.atlasPlane);
+      
+      // Generate sample text with more variety (repeated for Matrix mode)
+      const baseSampleText = 'MSDF Text Rendering!\n' +
+                        'The quick brown fox jumps over the lazy dog.\n' +
+                        'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n' +
+                        'abcdefghijklmnopqrstuvwxyz\n' +
+                        '0123456789 !@#$%^&*()_+-=[]{}\\|;:\'",.<>?/~`';
+      // Repeat text to ensure enough instances for Matrix mode (90 columns × 15 chars = 1350+)
+      const sampleText = (baseSampleText + '\n').repeat(10);
+      previewMesh = generateTextMesh(sampleText, atlasData, texture);
+      
+      if (previewMesh) {
+        scene.add(previewMesh);
+      }
+    }
+
+    // Presets
+    window.applyPreset = function(preset) {
+      const presets = {
+        default: {
+          fieldType: 'msdf',
+          fontSize: 42,
+          textureWidth: 1024,
+          textureHeight: 1024,
+          distanceRange: 4
+        },
+        mtsdf: {
+          fieldType: 'msdf',
+          fontSize: 48,
+          textureWidth: 1024,
+          textureHeight: 1024,
+          distanceRange: 6
+        },
+        production: {
+          fieldType: 'msdf',
+          fontSize: 48,
+          textureWidth: 2048,
+          textureHeight: 2048,
+          distanceRange: 6
+        },
+        mobile: {
+          fieldType: 'msdf',
+          fontSize: 36,
+          textureWidth: 512,
+          textureHeight: 512,
+          distanceRange: 4
+        }
+      };
+      
+      const config = presets[preset];
+      if (config) {
+        document.getElementById('fieldType').value = config.fieldType;
+        document.getElementById('fontSize').value = config.fontSize;
+        document.getElementById('textureWidth').value = config.textureWidth;
+        document.getElementById('textureHeight').value = config.textureHeight;
+        document.getElementById('distanceRange').value = config.distanceRange;
+        log(`Applied ${preset} preset`, 'info');
+      }
+    };
+
+    // UI helpers
+    function showSpinner(show) {
+      const spinner = document.getElementById('spinner');
+      spinner.className = show ? 'active' : '';
+      document.getElementById('generateBtn').disabled = show;
+    }
+
+    function showStatus(message, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = message;
+      status.className = type;
+      status.classList.remove('hidden');
+      setTimeout(() => {
+        if (type !== 'error') {
+          status.classList.add('hidden');
+        }
+      }, type === 'error' ? 5000 : 3000);
+    }
+
+    function log(message, type = 'info') {
+      const logEl = document.getElementById('log');
+      logEl.classList.remove('hidden');
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // Rendering control event listeners
+    function setupRenderingControls() {
+      const thicknessSlider = document.getElementById('thickness');
+      const thicknessValue = document.getElementById('thicknessValue');
+      const outlineWidthSlider = document.getElementById('outlineWidth');
+      const outlineWidthValue = document.getElementById('outlineWidthValue');
+      const outlineColorPicker = document.getElementById('outlineColor');
+      const matrixModeCheckbox = document.getElementById('matrixMode');
+      
+      thicknessSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        thicknessValue.textContent = value.toFixed(2);
+        
+        if (previewMesh && previewMesh.userData.material) {
+          previewMesh.userData.material.uniforms.thickness.value = value;
+        }
+      });
+      
+      outlineWidthSlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        outlineWidthValue.textContent = value.toFixed(2);
+        
+        if (previewMesh && previewMesh.userData.material) {
+          previewMesh.userData.material.uniforms.outlineWidth.value = value;
+        }
+      });
+      
+      outlineColorPicker.addEventListener('input', (e) => {
+        const color = new THREE.Color(e.target.value);
+        
+        if (previewMesh && previewMesh.userData.material) {
+          previewMesh.userData.material.uniforms.outlineColor.value = color;
+        }
+      });
+      
+      matrixModeCheckbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          // Enable Matrix mode
+          initMatrixMode();
+          // Hide atlas plane but KEEP orbit controls for 3D navigation!
+          if (window.atlasPlane) window.atlasPlane.visible = false;
+          controls.enabled = true; // Keep controls enabled for 3D exploration
+          // Position camera for good 3D view of the grid
+          camera.position.set(0, 2, 8); // Pull back and up slightly
+          camera.lookAt(0, 0, 0);
+          controls.update();
+        } else {
+          // Disable Matrix mode
+          stopMatrixMode();
+          // Restore atlas plane
+          if (window.atlasPlane) window.atlasPlane.visible = true;
+          controls.enabled = true;
+          // Regenerate normal text display
+          if (currentAtlas) {
+            displayAtlas(currentAtlas.texture.image.src, currentAtlas.data);
+          }
+        }
+      });
+    }
+
+    // Download functions
+    window.downloadAtlasPNG = function() {
+      if (!generatedAtlasData.texture) {
+        showStatus('No atlas generated yet', 'error');
+        return;
+      }
+      
+      // Convert base64 data URL to blob
+      const base64Data = generatedAtlasData.texture.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'image/png' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${generatedAtlasData.fontName || 'atlas'}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      log(`Downloaded ${a.download}`, 'info');
+      showStatus(`✓ Downloaded PNG`, 'success');
+    };
+    
+    window.downloadAtlasJSON = function() {
+      if (!generatedAtlasData.atlas) {
+        showStatus('No atlas generated yet', 'error');
+        return;
+      }
+      
+      // Convert JSON to blob
+      const jsonStr = JSON.stringify(generatedAtlasData.atlas, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${generatedAtlasData.fontName || 'atlas'}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      log(`Downloaded ${a.download}`, 'info');
+      showStatus(`✓ Downloaded JSON`, 'success');
+    };
+
+    // Initialize
+    initThree();
+    loadFonts();
+    setupRenderingControls();
+    
+    // Auto-generate Montserrat-Bold on load for debugging
+    setTimeout(() => {
+      const fontSelect = document.getElementById('fontSelect');
+      const montserratOption = Array.from(fontSelect.options).find(opt => opt.value.includes('Montserrat-Bold'));
+      if (montserratOption) {
+        fontSelect.value = montserratOption.value;
+        generate();
+      }
+    }, 500);
+    
+    log('Ready to generate MSDF atlases', 'info');
+  </script>
+</body>
+</html>
+
