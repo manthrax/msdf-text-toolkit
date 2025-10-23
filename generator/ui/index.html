@@ -775,10 +775,10 @@
       };
       
       // Create columns in 3D space (streams of characters)
-      const numColumns = 90; // Reduced to fit instance count
-      const charsPerColumn = 15; // Each column has a trail of characters
+      const numColumns = 300; // 10x density with more columns!
+      const charsPerColumn = 45; // Longer trails for density
       const gridSize = Math.ceil(Math.sqrt(numColumns)); // Square grid
-      const spacing = 1.2; // Distance between columns in 3D
+      const spacing = 0.4; // Tighter spacing for density
       const gridWidth = gridSize * spacing;
       const viewHeight = 10; // Taller view
       
@@ -944,8 +944,8 @@
                         'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n' +
                         'abcdefghijklmnopqrstuvwxyz\n' +
                         '0123456789 !@#$%^&*()_+-=[]{}\\|;:\'",.<>?/~`';
-      // Repeat text to ensure enough instances for Matrix mode (90 columns × 15 chars = 1350+)
-      const sampleText = (baseSampleText + '\n').repeat(10);
+      // Repeat text to ensure enough instances for Matrix mode (300 columns × 45 chars = 13500+)
+      const sampleText = (baseSampleText + '\n').repeat(100);
       previewMesh = generateTextMesh(sampleText, atlasData, texture);
       
       if (previewMesh) {
@@ -1072,8 +1072,8 @@
           // Hide atlas plane but KEEP orbit controls for 3D navigation!
           if (window.atlasPlane) window.atlasPlane.visible = false;
           controls.enabled = true; // Keep controls enabled for 3D exploration
-          // Position camera for good 3D view of the grid
-          camera.position.set(0, 2, 8); // Pull back and up slightly
+          // Position camera for good 3D view of the dense grid
+          camera.position.set(0, 1, 3.5); // Closer view for tighter spacing
           camera.lookAt(0, 0, 0);
           controls.update();
         } else {
