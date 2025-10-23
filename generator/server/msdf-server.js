@@ -39,6 +39,7 @@ app.use(express.json());
 const uiPath = join(__dirname, '../ui');
 const fontsPath = join(__dirname, '../fonts');
 const atlasesPath = join(__dirname, '../../atlases');
+const examplesPath = join(__dirname, '../../examples');
 
 app.use(express.static(uiPath));
 
@@ -47,6 +48,9 @@ app.use('/fonts', express.static(fontsPath));
 
 // Serve atlases directory
 app.use('/atlases', express.static(atlasesPath));
+
+// Serve examples directory
+app.use('/examples', express.static(examplesPath));
 
 // Serve index.html as the default root page
 app.get('/', (req, res) => {
@@ -152,6 +156,7 @@ app.listen(PORT, () => {
   console.log(`  📁 Serving UI from: ${uiPath}`);
   console.log(`  📦 Fonts from: ${fontsPath}`);
   console.log(`  💾 Atlases from: ${atlasesPath}`);
+  console.log(`  🎬 Examples from: ${examplesPath}`);
   console.log('');
   console.log('  Open http://localhost:3001 in your browser');
   console.log('');

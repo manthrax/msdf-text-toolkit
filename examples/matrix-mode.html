@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MSDF Text Toolkit - 3D Matrix Mode Demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #0f0;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+    #info h1 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      color: #0f0;
+    }
+    #info p {
+      margin: 5px 0;
+      color: #0a0;
+    }
+    #controls {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #0f0;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px 20px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(0, 255, 0, 0.3);
+    }
+    #controls label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    #controls input[type="range"] {
+      width: 200px;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  
+  <div id="info">
+    <h1>🟢 3D Matrix Mode</h1>
+    <p><strong>300 columns</strong> of falling code in 3D space</p>
+    <p>🖱️ <strong>Drag</strong> to orbit • <strong>Scroll</strong> to zoom</p>
+    <p>🎨 <strong>Right-drag</strong> to pan through the Matrix</p>
+  </div>
+
+  <div id="controls">
+    <label>
+      Density: <input type="range" id="densitySlider" min="50" max="500" value="300" step="50">
+      <span id="densityValue">300</span>
+    </label>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // Camera position
+    camera.position.set(0, 1, 3.5);
+
+    // OrbitControls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // Load font atlas
+    const atlasTexture = new THREE.TextureLoader().load('/atlases/Montserrat-Bold.png');
+    atlasTexture.colorSpace = THREE.NoColorSpace;
+    atlasTexture.minFilter = THREE.LinearMipMapLinearFilter;
+    atlasTexture.magFilter = THREE.LinearFilter;
+    atlasTexture.flipY = false;
+    atlasTexture.generateMipmaps = true;
+
+    let atlasData;
+    fetch('/atlases/Montserrat-Bold.json')
+      .then(res => res.json())
+      .then(data => {
+        atlasData = data;
+        initMatrix();
+      });
+
+    // MSDF Shaders
+    const vertexShader = `
+      attribute vec4 uvOffset;
+      attribute vec3 instanceColor;
+      varying vec2 vUv;
+      varying vec3 vColor;
+      
+      void main() {
+        vUv = uv * uvOffset.zw + uvOffset.xy;
+        vColor = instanceColor;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const fragmentShader = `
+      uniform sampler2D msdfTexture;
+      uniform float thickness;
+      uniform float smoothness;
+      varying vec2 vUv;
+      varying vec3 vColor;
+      
+      float median(float r, float g, float b) {
+        return max(min(r, g), min(max(r, g), b));
+      }
+      
+      void main() {
+        vec3 sample = texture2D(msdfTexture, vUv).rgb;
+        float sigDist = median(sample.r, sample.g, sample.b) - 0.5;
+        
+        vec2 Jdx = dFdx(vUv);
+        vec2 Jdy = dFdy(vUv);
+        float scaledDist = sigDist / sqrt(dot(Jdx, Jdx) + dot(Jdy, Jdy));
+        
+        float alpha = clamp(scaledDist * thickness + 0.5, 0.0, 1.0);
+        
+        if (alpha < 0.01) discard;
+        
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `;
+
+    let mesh, matrixState;
+
+    function initMatrix() {
+      const numColumns = 300;
+      const charsPerColumn = 45;
+      const totalInstances = numColumns * charsPerColumn;
+
+      // Create instanced geometry
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          msdfTexture: { value: atlasTexture },
+          thickness: { value: 0.5 },
+          smoothness: { value: 0.05 }
+        },
+        vertexShader,
+        fragmentShader,
+        transparent: true,
+        depthTest: true,
+        depthWrite: true
+      });
+
+      mesh = new THREE.InstancedMesh(geometry, material, totalInstances);
+      
+      // Setup attributes
+      const uvOffset = new Float32Array(totalInstances * 4);
+      const instanceColors = new Float32Array(totalInstances * 3);
+      
+      geometry.setAttribute('uvOffset', new THREE.InstancedBufferAttribute(uvOffset, 4));
+      geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(instanceColors, 3));
+      
+      scene.add(mesh);
+
+      // Build glyph map
+      const glyphMap = new Map();
+      for (const charData of atlasData.chars) {
+        glyphMap.set(String.fromCharCode(charData.id), charData);
+      }
+      const glyphArray = Array.from(glyphMap.keys());
+
+      // Create 3D columns
+      const gridSize = Math.ceil(Math.sqrt(numColumns));
+      const spacing = 0.4;
+      const gridWidth = gridSize * spacing;
+      
+      matrixState = {
+        columns: [],
+        glyphMap,
+        glyphArray,
+        texW: atlasData.common.scaleW,
+        texH: atlasData.common.scaleH
+      };
+
+      let instanceIdx = 0;
+      for (let i = 0; i < numColumns && instanceIdx < totalInstances; i++) {
+        const gridX = i % gridSize;
+        const gridZ = Math.floor(i / gridSize);
+        
+        const column = {
+          x: -gridWidth / 2 + gridX * spacing,
+          y: 5 + Math.random() * 5,
+          z: -gridWidth / 2 + gridZ * spacing,
+          speed: 0.015 + Math.random() * 0.05,
+          length: charsPerColumn,
+          instanceIndices: [],
+          chars: []
+        };
+
+        for (let j = 0; j < charsPerColumn && instanceIdx < totalInstances; j++) {
+          column.instanceIndices.push(instanceIdx);
+          column.chars.push(glyphArray[Math.floor(Math.random() * glyphArray.length)]);
+          instanceIdx++;
+        }
+
+        matrixState.columns.push(column);
+      }
+
+      // Initial colors
+      for (let i = 0; i < totalInstances; i++) {
+        const brightness = 0.3 + Math.random() * 0.7;
+        instanceColors[i * 3 + 0] = 0.0;
+        instanceColors[i * 3 + 1] = brightness;
+        instanceColors[i * 3 + 2] = 0.0;
+      }
+      geometry.attributes.instanceColor.needsUpdate = true;
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (mesh && matrixState) {
+        const dummy = new THREE.Object3D();
+        const geometry = mesh.geometry;
+        const uvOffset = geometry.attributes.uvOffset.array;
+        const colors = geometry.attributes.instanceColor.array;
+        const charSize = 0.12;
+
+        for (const column of matrixState.columns) {
+          column.y -= column.speed;
+
+          if (column.y < -6) {
+            column.y = 6 + Math.random() * 4;
+            column.speed = 0.015 + Math.random() * 0.05;
+            
+            for (let i = 0; i < column.chars.length; i++) {
+              if (Math.random() > 0.7) {
+                column.chars[i] = matrixState.glyphArray[
+                  Math.floor(Math.random() * matrixState.glyphArray.length)
+                ];
+              }
+            }
+          }
+
+          for (let i = 0; i < column.instanceIndices.length; i++) {
+            const idx = column.instanceIndices[i];
+            const charY = column.y - (i * charSize * 0.85);
+
+            dummy.position.set(column.x, charY, column.z);
+            dummy.scale.set(charSize, charSize, 1);
+            dummy.updateMatrix();
+            mesh.setMatrixAt(idx, dummy.matrix);
+
+            if (Math.random() > 0.98) {
+              const char = matrixState.glyphArray[Math.floor(Math.random() * matrixState.glyphArray.length)];
+              const glyph = matrixState.glyphMap.get(char);
+              
+              if (glyph) {
+                uvOffset[idx * 4 + 0] = glyph.x / matrixState.texW;
+                uvOffset[idx * 4 + 1] = (glyph.y + glyph.height) / matrixState.texH;
+                uvOffset[idx * 4 + 2] = glyph.width / matrixState.texW;
+                uvOffset[idx * 4 + 3] = -glyph.height / matrixState.texH;
+              }
+            }
+
+            const fadePosition = i / column.instanceIndices.length;
+            const brightness = 0.3 + fadePosition * 0.7;
+            
+            colors[idx * 3 + 0] = brightness * 0.15;
+            colors[idx * 3 + 1] = brightness * 0.9;
+            colors[idx * 3 + 2] = brightness * 0.2;
+          }
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        geometry.attributes.uvOffset.needsUpdate = true;
+        geometry.attributes.instanceColor.needsUpdate = true;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Density control (placeholder - would require reinitializing)
+    document.getElementById('densitySlider').addEventListener('input', (e) => {
+      document.getElementById('densityValue').textContent = e.target.value;
+    });
+  </script>
+</body>
+</html>
+

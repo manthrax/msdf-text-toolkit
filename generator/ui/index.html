@@ -28,7 +28,11 @@
       background: #161616;
       border-right: 1px solid #333;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 20px;
+      max-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     h1 {
@@ -149,6 +153,24 @@
       height: 100%;
     }
 
+    /* Custom scrollbar for sidebar */
+    #sidebar::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    #sidebar::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+
+    #sidebar::-webkit-scrollbar-thumb {
+      background: #444;
+      border-radius: 4px;
+    }
+
+    #sidebar::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+
     #status {
       position: absolute;
       top: 20px;
@@ -251,6 +273,15 @@
   <div id="container">
     <div id="sidebar">
       <h1>MSDF Generator</h1>
+
+      <div class="section">
+        <div class="section-title">📚 Examples</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <a href="/examples/basic.html" target="_blank" style="color: #0f0; text-decoration: none; font-size: 12px;">Basic Demo</a>
+          <span style="color: #444;">•</span>
+          <a href="/examples/matrix-mode.html" target="_blank" style="color: #0f0; text-decoration: none; font-size: 12px;">Matrix Mode</a>
+        </div>
+      </div>
       
       <div class="section">
         <div class="section-title">Font Source</div>
@@ -263,6 +294,18 @@
         <select id="fontSelect">
           <option value="">-- Select font --</option>
         </select>
+      </div>
+
+      <button id="generateBtn" onclick="generate()" style="margin-bottom: 20px;">🚀 Generate Atlas</button>
+
+      <div id="downloadSection" class="section hidden">
+        <div class="section-title">Download Atlas</div>
+        <button onclick="downloadAtlasPNG()" style="margin-bottom: 8px;">
+          📥 Download PNG
+        </button>
+        <button onclick="downloadAtlasJSON()">
+          📥 Download JSON
+        </button>
       </div>
 
       <div class="section">
@@ -304,18 +347,6 @@
         <label for="charset">Characters to Include</label>
         <textarea id="charset" placeholder="Leave empty for ASCII printable"></textarea>
         <div class="help-text">Default: all ASCII printable (space through ~)</div>
-      </div>
-
-      <button id="generateBtn" onclick="generate()">Generate Atlas</button>
-
-      <div id="downloadSection" class="section hidden">
-        <div class="section-title">Download Atlas</div>
-        <button onclick="downloadAtlasPNG()" style="margin-bottom: 8px;">
-          📥 Download PNG
-        </button>
-        <button onclick="downloadAtlasJSON()">
-          📥 Download JSON
-        </button>
       </div>
 
       <div class="section">
@@ -436,16 +467,16 @@
           select.appendChild(option);
         });
         
-        // Auto-generate Montserrat-Bold for debugging (only if ?debug=true)
+        // Select Montserrat-Bold by default (sensible default)
+        const montserrat = data.fonts.find(f => f.includes('Montserrat-Bold'));
+        if (montserrat) {
+          select.value = `fonts/${montserrat}`;
+        }
+        
+        // Auto-generate if debug=true
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('debug') === 'true') {
-          setTimeout(() => {
-            const montserrat = data.fonts.find(f => f.includes('Montserrat-Bold'));
-            if (montserrat) {
-              select.value = `fonts/${montserrat}`;
-              setTimeout(() => generate(), 100);
-            }
-          }, 200);
+          setTimeout(() => generate(), 200);
         }
       } catch (error) {
         log(`Failed to load fonts: ${error.message}`, 'error');
