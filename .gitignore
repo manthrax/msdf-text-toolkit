@@ -27,8 +27,7 @@ desktop.ini
 *~
 
 # Generated atlases (optional - you may want to keep some examples)
-atlases/*.png
-atlases/*.json
+
 !atlases/README.md
 
 # Environment variables
